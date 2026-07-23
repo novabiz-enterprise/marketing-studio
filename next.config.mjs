@@ -4,6 +4,14 @@ const nextConfig = {
   output: 'standalone',
   experimental: {
     serverComponentsExternalPackages: ['@prisma/client', '.prisma/client'],
+    outputFileTracingIncludes: {
+      '/*': [
+        './node_modules/.prisma/client/**/*',
+        './node_modules/@prisma/client/**/*',
+        './node_modules/@prisma/adapter-neon/**/*',
+        './node_modules/@neondatabase/serverless/**/*',
+      ],
+    },
   },
   webpack: (config, { isServer }) => {
     if (!isServer) {
