@@ -1,7 +1,5 @@
 // Atlas SaaS Starter — data model
-// Postgres in production (Supabase / Neon / Vercel Postgres).
-// For zero-config local dev you can switch provider to "sqlite"
-// and set DATABASE_URL="file:./dev.db" (remove directUrl).
+// Production database: PostgreSQL on Neon/Vercel.
 
 generator client {
   provider   = "prisma-client-js"
@@ -9,8 +7,9 @@ generator client {
 }
 
 datasource db {
-  provider  = "sqlite"
+  provider  = "postgresql"
   url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ── NextAuth standard models ──
