@@ -436,7 +436,7 @@ export default function AdReferencePage() {
                     placeholder={locale === 'zh' ? '新台词(推销你的产品)' : 'New script (pitch your product)'}
                     className="w-full rounded-lg bg-white/[0.05] border border-white/10 px-3 py-2 text-sm text-white/90 placeholder:text-white/25 outline-none focus:border-white/25 resize-none" />
                   <select value={voiceId} onChange={(e) => setVoiceId(e.target.value)}
-                    className="w-full rounded-lg bg-[#26282c] border border-white/10 px-3 py-2 text-sm text-white/90 outline-none">
+                    className="dark-select w-full rounded-lg bg-[#26282c] border border-white/10 px-3 py-2 text-sm text-white/90 outline-none">
                     {VOICES.map((v) => <option key={v.id} value={v.id}>{locale === 'zh' ? ({ 'hpp4J3VqNfWAUOO0d1Us': '女声 · 明亮', 'EXAVITQu4vr4xnSDxMaL': '女声 · 温暖', 'CwhRBWXzGAHq8TQ4Fs17': '男声 · 放松' }[v.id] ?? v.label) : v.label}</option>)}
                   </select>
                 </div>

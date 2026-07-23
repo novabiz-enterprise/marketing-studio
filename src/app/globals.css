@@ -37,6 +37,21 @@ body {
   .btn-ghost {
     @apply inline-flex items-center justify-center gap-2 rounded-xl border border-neutral-300 bg-white px-5 py-3 font-medium text-neutral-700 transition hover:border-neutral-400 hover:bg-neutral-50;
   }
+  .dark-select {
+    color-scheme: dark;
+  }
+  .dark-select option,
+  .dark-select optgroup {
+    background-color: #1c1e21;
+    color: #f7f7f8;
+  }
+  .dark-select option:checked {
+    background-color: #7036f0;
+    color: #ffffff;
+  }
+  .dark-select option:disabled {
+    color: rgba(247, 247, 248, 0.45);
+  }
 }
 
 /* skeleton shimmer for loading states */

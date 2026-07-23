@@ -600,7 +600,7 @@ export default function DramaStudioPage() {
       'radial-gradient(70% 55% at 50% -6%, rgba(112,54,240,0.10) 0%, rgba(112,54,240,0) 60%), linear-gradient(to right, rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px)',
     backgroundSize: 'auto, 44px 44px, 44px 44px',
   } as React.CSSProperties;
-  const selCls = 'appearance-none bg-white/[0.04] rounded-lg pl-2.5 pr-7 py-2 text-xs text-white/90 focus:outline-none focus:ring-1 focus:ring-[#7036F0]';
+  const selCls = 'dark-select appearance-none bg-white/[0.04] rounded-lg pl-2.5 pr-7 py-2 text-xs text-white/90 focus:outline-none focus:ring-1 focus:ring-[#7036F0]';
 
   // 顶层 hydration gate:首帧统一空骨架,避免 session/locale 造成 SSR≠client 分歧(#418)。
   if (!mounted) return <main className="min-h-screen text-[#f7f7f8]" style={gridBg} />;
@@ -757,7 +757,7 @@ export default function DramaStudioPage() {
                     <div className="flex items-center gap-2 mb-2 flex-wrap">
                       <span className="text-[11px] rounded-full px-2 py-0.5 bg-white/5 border border-white/10" style={{ color: ACCENT }}>{locale === 'zh' ? `场景 ${seg.i}` : `Scene ${seg.i}`}</span>
                       {/* 每段时长:AI 给建议值,用户可微调 */}
-                      <select value={seg.durationSec || 8} onChange={(e) => setSegDuration(i, Number(e.target.value))} className="appearance-none bg-white/[0.06] rounded px-1.5 py-0.5 text-[10px] text-white/80 focus:outline-none focus:ring-1 focus:ring-[#7036F0]" title={locale === 'zh' ? '本段时长(秒),AI 规划可微调' : 'Scene duration (s), AI-planned & adjustable'}>{VIDEO_DURATIONS.map((d) => <option key={d} value={d}>{d}s</option>)}</select>
+                      <select value={seg.durationSec || 8} onChange={(e) => setSegDuration(i, Number(e.target.value))} className="dark-select appearance-none bg-white/[0.06] rounded px-1.5 py-0.5 text-[10px] text-white/80 focus:outline-none focus:ring-1 focus:ring-[#7036F0]" title={locale === 'zh' ? '本段时长(秒),AI 规划可微调' : 'Scene duration (s), AI-planned & adjustable'}>{VIDEO_DURATIONS.map((d) => <option key={d} value={d}>{d}s</option>)}</select>
                       {/* 出场角色(对应定妆图参考) */}
                       {(seg.cast || []).map((k) => {
                         const c = script.characters?.find((x) => x.key === k);

@@ -188,12 +188,12 @@ export default function AdSkitPage() {
               <span className="mt-1 block text-xs text-white/50">{locale === 'zh' ? '可选：上传 1-4 张真实产品照（多角度 / 多款式，原样保留你的产品，全部作为 Grok 视频参考图）。不传则按描述生成。' : 'Optional: upload 1-4 real product photos (multiple angles / variants — keeps your product exactly as-is, all used as Grok video references). Skip it to generate from your description.'}</span>
             </div>
             <label className="mt-3 block"><span className="mb-1 block text-xs font-medium text-white/60">{locale === 'zh' ? '风格' : 'Style'}</span>
-              <select value={style} onChange={(e) => setStyle(e.target.value)} className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white outline-none focus:border-[#7036F0]">
+              <select value={style} onChange={(e) => setStyle(e.target.value)} className="dark-select w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white outline-none focus:border-[#7036F0]">
                 {STYLES.map((s) => <option key={s.key} value={s.key}>{locale === 'zh' ? STYLE_LABELS_ZH[s.key] : s.label}</option>)}
               </select>
             </label>
             <label className="mt-3 block"><span className="mb-1 block text-xs font-medium text-white/60">{locale === 'zh' ? '创意大模型' : 'Creative LLM'}</span>
-              <select value={llm} onChange={(e) => setLlm(e.target.value)} className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white outline-none focus:border-[#7036F0]">
+              <select value={llm} onChange={(e) => setLlm(e.target.value)} className="dark-select w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white outline-none focus:border-[#7036F0]">
                 {PLAN_MODELS.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
               </select>
             </label>
