@@ -48,12 +48,6 @@ export default function Home() {
         <div className="mx-auto flex w-full max-w-6xl items-center gap-3">
           <div className="w-7 h-7 rounded-lg grid place-items-center text-sm font-bold" style={{ background: '#7036F0', color: '#fff' }}>✦</div>
           <b className="text-sm tracking-tight">Marketing Studio</b>
-          <a href="https://atlascloud.ai?utm_source=github&utm_campaign=ecommerce-studio" target="_blank" rel="noopener noreferrer"
-             className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-white/45 transition hover:border-white/25 hover:text-white/80">
-            <span>Powered by</span>
-            <img src="/atlas-cloud-wordmark.png" alt="Atlas Cloud" className="h-3.5 w-auto opacity-90" />
-            <span aria-hidden="true">↗</span>
-          </a>
         </div>
       </div>
 

@@ -4,12 +4,10 @@ import { usePathname } from 'next/navigation';
 import { Navbar } from '@/components/Navbar';
 import { AppSidebar } from '@/components/AppSidebar';
 import { Footer } from '@/components/Footer';
-import { DeployButton } from '@/components/DeployButton';
 import { UserMenu } from '@/components/UserMenu';
 import { LangToggle } from '@/components/LangToggle';
 import { CreditBadge } from '@/components/CreditBadge';
 import { HistoryButton } from '@/components/HistoryButton';
-import { ByokKey } from '@/components/ByokKey';
 
 // marketing-studio 走全出血沉浸式(深色、无浅色 starter 外壳),完全复刻 Higgsfield。
 // 其余页面保持 SaaS starter 的 Navbar + 侧栏 + Footer 外壳不变。
@@ -25,10 +23,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
         <div className="fixed top-3 right-4 z-50 flex items-center gap-2">
           <HistoryButton />
           <CreditBadge />
-          <ByokKey />
           <LangToggle />
           <UserMenu />
-          <DeployButton />
         </div>
       </div>
     );
