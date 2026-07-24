@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useSession, signIn } from 'next-auth/react';
 import { Download, Loader2, Clock, Play, X, Film } from 'lucide-react';
 import { useI18n } from '@/i18n/provider';
+import { mediaDownloadUrl } from '@/lib/media-url';
 
 type DramaAssets = {
   kind: string;
@@ -34,15 +35,22 @@ const SOURCE: Record<string, string> = {
   'marketing-studio': 'myWorkPage.sourceAd',
   'drama-studio': 'myWorkPage.sourceDrama',
   'ad-reference': 'myWorkPage.sourceRemake',
+  'ad-skit': 'myWorkPage.sourceSkit',
 };
 
 function firstOutput(c: Creation) {
   return Array.isArray(c.outputs) && typeof c.outputs[0] === 'string' ? c.outputs[0] : '';
 }
 function mediaKind(url: string, model?: string): MediaKind {
-  const u = url.toLowerCase().split('?')[0];
+  let source = url;
+  try {
+    const u = new URL(url, typeof window === 'undefined' ? 'http://localhost' : window.location.origin);
+    const proxied = u.searchParams.get('url');
+    if (proxied) source = proxied;
+  } catch { /* ignore malformed URLs */ }
+  const u = source.toLowerCase().split('?')[0];
   const m = (model || '').toLowerCase();
-  if (/\.(mp4|webm|mov|m4v)$/.test(u) || m.includes('video') || m.includes('lipsync')) return 'video';
+  if (/\.(mp4|webm|mov|m4v)$/.test(u) || /\/videos\/[^/]+\/content$/.test(u) || m.includes('video') || m.includes('lipsync') || m.includes('happyhorse') || m.includes('wan') || m.includes('grok')) return 'video';
   if (/\.(png|jpe?g|webp|gif)$/.test(u) || m.includes('image')) return 'image';
   if (/\.(mp3|wav|m4a|aac|ogg)$/.test(u) || m.includes('speech') || m.includes('audio')) return 'audio';
   return 'unknown';
@@ -68,7 +76,15 @@ export default function MyWorkPage() {
           // 推进"生成中"的占位:触发后端完成检测 / 15 分钟超时兜底,下次刷新即生效(不阻塞渲染)。
           list
             .filter((c) => c.status === 'processing')
-            .forEach((c) => fetch(`/api/creations/${c.id}`, { signal: ac.signal }).catch(() => {}));
+            .forEach((c) => {
+              fetch(`/api/creations/${c.id}`, { signal: ac.signal, cache: 'no-store' })
+                .then((r) => (r.ok ? r.json() : null))
+                .then((updated) => {
+                  if (!updated?.id) return;
+                  setItems((prev) => prev?.map((item) => (item.id === updated.id ? { ...item, ...updated } : item)) ?? prev);
+                })
+                .catch(() => {});
+            });
         })
         .catch((e) => { if (e?.name !== 'AbortError') setItems((prev) => prev ?? []); });
     void load();
@@ -129,7 +145,7 @@ export default function MyWorkPage() {
               const badge = src ? t(src) : null;
               const title = c.prompt || t('myWorkPage.untitled');
               const time = new Date(c.createdAt).toLocaleString();
-              const url = firstOutput(c);
+              const url = mediaDownloadUrl(firstOutput(c));
 
               // ★ drama 作品文件夹:点进独立详情页看 角色/各场景(首帧+视频)/成片。封面取首个定妆图→场景图→成片。
               if (c.assets && c.assets.kind === 'drama') {

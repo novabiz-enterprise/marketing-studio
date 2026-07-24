@@ -1,7 +1,7 @@
 import { withProviderKeys } from '@/lib/request-context';
 import { NextResponse } from 'next/server';
 import { isProviderPollUrl, pollOnce } from '@/lib/openrouter';
-import { persistToR2 } from '@/lib/marketing-studio/r2';
+import { persistToR2, playableMediaUrl } from '@/lib/marketing-studio/r2';
 import { refundFailedTask, markTaskCompleted } from '@/lib/marketing-studio/gen-task';
 
 export const maxDuration = 60;
@@ -49,7 +49,7 @@ async function __byokPOST(req: Request) {
     return NextResponse.json({ status: r.status, outputs: r.outputs, error: r.error });
   } catch (e) {
     console.error('[marketing/poll] post-process error:', String(e));
-    if (r.status === 'completed' && r.outputs?.length) return NextResponse.json({ status: 'completed', outputs: r.outputs });
+    if (r.status === 'completed' && r.outputs?.length) return NextResponse.json({ status: 'completed', outputs: r.outputs.map(playableMediaUrl) });
     return NextResponse.json({ status: r.status, outputs: r.outputs || [], error: r.error });
   }
 }

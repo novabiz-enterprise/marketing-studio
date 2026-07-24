@@ -223,7 +223,7 @@ export default function AdSkitPage() {
               <div className="rounded-2xl border border-white/10 bg-[#1c1e21] p-5">
                 <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-white"><Video className="h-4 w-4 text-[#7036F0]" /> {t('adSkit.finishedAd')}</h3>
                 <div className="flex aspect-video items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-white/[0.03]">
-                  {video.status === 'done' && video.url ? <video src={video.url} controls className="h-full w-full object-contain" />
+                  {video.status === 'done' && video.url ? <video src={dl(video.url)} controls playsInline className="h-full w-full object-contain" />
                     : video.status === 'processing' ? <div className="flex flex-col items-center gap-2 text-white/40"><Loader2 className="h-7 w-7 animate-spin text-[#7036F0]" /><span className="text-xs">{t('adSkit.grokRendering')}</span></div>
                     : video.status === 'failed' ? <span className="text-sm text-red-400">{t('adSkit.renderFailed')}</span>
                     : <span className="text-sm text-white/30">{t('adSkit.rendersAfterProduct')}</span>}

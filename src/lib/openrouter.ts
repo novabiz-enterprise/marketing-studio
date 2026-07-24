@@ -48,7 +48,7 @@ function urlWithinBase(url: string, base: string, pathPrefix = ''): boolean {
   }
 }
 
-function isOpenRouterVideoUrl(url: string): boolean {
+export function isOpenRouterVideoUrl(url: string): boolean {
   return urlWithinBase(url, OPENROUTER_BASE, '/videos/');
 }
 

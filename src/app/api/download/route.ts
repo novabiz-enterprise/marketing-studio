@@ -1,3 +1,8 @@
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { mediaFetchHeadersForUrl } from '@/lib/openrouter';
+import { prisma } from '@/lib/prisma';
+
 const MAX_PROXY_BYTES = 25 * 1024 * 1024;
 const LARGE_MEDIA_EXTENSIONS = new Set([
   'aac',
@@ -33,7 +38,46 @@ function isLargeMedia(contentType: string, ext: string): boolean {
   );
 }
 
-  // Default behavior is a 302 redirect to the original provider URL. Proxying
+function openRouterVideoTaskId(url: URL): string {
+  const m = /^\/api\/v1\/videos\/([^/]+)\/content$/.exec(url.pathname);
+  return m?.[1] || '';
+}
+
+async function proxyOpenRouterVideo(req: Request, source: URL): Promise<Response> {
+  const taskId = openRouterVideoTaskId(source);
+  if (!taskId) return new Response('forbidden', { status: 403 });
+
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) return new Response('unauthorized', { status: 401 });
+
+  const ownsTask = await prisma.creation.findFirst({
+    where: { userId: session.user.id, taskId },
+    select: { id: true },
+  });
+  if (!ownsTask) return new Response('forbidden', { status: 403 });
+
+  const headers: Record<string, string> = {
+    ...(mediaFetchHeadersForUrl(source.toString()) || {}),
+  };
+  const range = req.headers.get('range');
+  if (range) headers.Range = range;
+
+  const r = await fetch(source, { headers, cache: 'no-store' });
+  if (!r.ok || !r.body) return new Response('upstream error', { status: 502 });
+
+  const out = new Headers();
+  for (const key of ['content-type', 'content-length', 'content-range', 'accept-ranges', 'etag', 'last-modified']) {
+    const value = r.headers.get(key);
+    if (value) out.set(key, value);
+  }
+  if (!out.has('content-type')) out.set('content-type', 'video/mp4');
+  out.set('Content-Disposition', 'inline; filename="instatak-video.mp4"');
+  out.set('Cache-Control', 'private, max-age=3600');
+
+  return new Response(r.body, { status: r.status, headers: out });
+}
+
+// Default behavior is a 302 redirect to the original provider URL. Proxying
 // large media through a serverless function quickly exhausts Vercel/Workers
 // origin-transfer quotas, so only explicit small-file proxy requests are served.
 export async function GET(req: Request) {
@@ -50,6 +94,10 @@ export async function GET(req: Request) {
   // SSRF guard: only proxy known media hosts.
   if (!/(^|\.)aliyuncs\.com$|(^|\.)openrouter\.ai$/.test(source.hostname)) {
     return new Response('forbidden', { status: 403 });
+  }
+
+  if (source.hostname === 'openrouter.ai' && openRouterVideoTaskId(source)) {
+    return proxyOpenRouterVideo(req, source);
   }
 
   if (requestUrl.searchParams.get('proxy') !== '1') {

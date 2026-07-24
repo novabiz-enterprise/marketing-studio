@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useSession, signIn } from 'next-auth/react';
 import { Loader2, ArrowLeft, Download, Film } from 'lucide-react';
 import { useI18n } from '@/i18n/provider';
+import { mediaDownloadUrl } from '@/lib/media-url';
 
 // drama 作品文件夹详情页:分区展示 角色定妆图 / 各场景(首帧+视频) / 最终成片。
 // 数据来自 /api/creations/[id](GET 返回含 assets)。制作中会持续变化,故 15s 轮询刷新。
@@ -47,7 +48,7 @@ export default function WorkDetailPage() {
     return () => { alive = false; clearInterval(t); };
   }, [id, status]);
 
-  const finalVideo = c && c !== 'notfound' && Array.isArray(c.outputs) ? c.outputs[0] : '';
+  const finalVideo = c && c !== 'notfound' && Array.isArray(c.outputs) ? mediaDownloadUrl(c.outputs[0]) : '';
 
   return (
     <div className="min-h-screen" style={{ background: '#131416' }}>
@@ -157,7 +158,7 @@ function DramaFolder({ c, finalVideo }: { c: Creation; finalVideo: string }) {
                 {s.videoUrl ? (
                   <div>
                     <div className="mb-1 text-[10px] text-white/40">{t('workDetail.video')}</div>
-                    <video src={s.videoUrl} controls playsInline poster={s.frameUrl || undefined} className="h-40 rounded-lg border border-white/10 bg-black" />
+                    <video src={mediaDownloadUrl(s.videoUrl)} controls playsInline poster={s.frameUrl || undefined} className="h-40 rounded-lg border border-white/10 bg-black" />
                   </div>
                 ) : (
                   <div className="grid h-40 w-24 place-items-center rounded-lg border border-dashed border-white/15 bg-black/20 text-[10px] text-white/40">{t('workDetail.pending')}</div>

@@ -1,5 +1,5 @@
 import { getCloudflareContext } from '@opennextjs/cloudflare';
-import { mediaFetchHeadersForUrl } from '@/lib/openrouter';
+import { isOpenRouterVideoUrl, mediaFetchHeadersForUrl } from '@/lib/openrouter';
 
 // Provider outputs can be temporary/download-only. Store them in our own R2
 // bucket and return same-origin, inline-playable URLs when available.
@@ -54,22 +54,30 @@ function sniffMedia(buffer: ArrayBuffer, declared: string): { contentType: strin
   };
 }
 
+export function playableMediaUrl(sourceUrl: string): string {
+  if (/^https?:\/\//.test(sourceUrl) && isOpenRouterVideoUrl(sourceUrl)) {
+    return `/api/download?proxy=1&url=${encodeURIComponent(sourceUrl)}`;
+  }
+  return sourceUrl;
+}
+
 export async function persistToR2(sourceUrl: string): Promise<string> {
   if (!/^https?:\/\//.test(sourceUrl)) return sourceUrl;
+  const fallback = playableMediaUrl(sourceUrl);
   try {
     const { env } = getCloudflareContext();
     const bucket = (env as unknown as { MEDIA_BUCKET?: R2BucketLike }).MEDIA_BUCKET;
-    if (!bucket) return sourceUrl;
+    if (!bucket) return fallback;
     // 后端 fetch 不受浏览器 CORS/force-download 限制;不带 Referer 绕过 OSS 防盗链。
     const res = await fetch(sourceUrl, { headers: { 'User-Agent': 'Mozilla/5.0', ...(mediaFetchHeadersForUrl(sourceUrl) || {}) }, cache: 'no-store' });
-    if (!res.ok) return sourceUrl;
+    if (!res.ok) return fallback;
     const buf = await res.arrayBuffer();
     const media = sniffMedia(buf, res.headers.get('content-type') || 'application/octet-stream');
     const key = `${crypto.randomUUID()}.${media.extension}`;
     await bucket.put(key, buf, { httpMetadata: { contentType: media.contentType } });
     return `/api/marketing-studio/media/${key}`;
   } catch {
-    return sourceUrl;
+    return fallback;
   }
 }
 

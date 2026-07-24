@@ -5,9 +5,13 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { pollOnce } from '@/lib/openrouter';
 import { grantCredits } from '@/lib/credits';
-import { persistToR2 } from '@/lib/marketing-studio/r2';
+import { persistToR2, playableMediaUrl } from '@/lib/marketing-studio/r2';
 
 export const maxDuration = 60;
+
+function normalizeOutputs(outputs: unknown): string[] {
+  return Array.isArray(outputs) ? outputs.filter((u): u is string => typeof u === 'string' && !!u).map(playableMediaUrl) : [];
+}
 
 // 前端生成中断/失败时,把自己的、仍在 processing 的占位作品标记为 failed(作品页显示"失败"而非永远转圈)。
 async function __byokPOST(req: Request, { params }: { params: { id: string } }) {
@@ -32,8 +36,13 @@ async function __byokGET(_req: Request, { params }: { params: { id: string } }) 
     return NextResponse.json({ error: 'not_found' }, { status: 404 });
 
   // Terminal states: nothing more to do.(带 assets,drama 详情页要用)
-  if (c.status === 'completed' || c.status === 'failed')
-    return NextResponse.json({ id: c.id, status: c.status, outputs: c.outputs, error: c.error, assets: c.assets, prompt: c.prompt, templateId: c.templateId, inputImage: c.inputImage, createdAt: c.createdAt });
+  if (c.status === 'completed' || c.status === 'failed') {
+    const outputs = normalizeOutputs(c.outputs);
+    if (c.status === 'completed' && JSON.stringify(outputs) !== JSON.stringify(c.outputs || [])) {
+      await prisma.creation.updateMany({ where: { id: c.id }, data: { outputs } });
+    }
+    return NextResponse.json({ id: c.id, status: c.status, outputs, error: c.error, assets: c.assets, prompt: c.prompt, templateId: c.templateId, inputImage: c.inputImage, createdAt: c.createdAt });
+  }
   // 占位记录(无 getUrl):前端在完成/失败时更新它;若已停在 processing 超过 15 分钟,视为前端中断,
   // 自动判失败,避免作品页永远转圈。占位不扣费,无需退款。
   if (!c.getUrl) {
@@ -43,7 +52,7 @@ async function __byokGET(_req: Request, { params }: { params: { id: string } }) 
       await prisma.creation.updateMany({ where: { id: c.id, status: 'processing' }, data: { status: 'failed', error: 'timeout' } });
       return NextResponse.json({ id: c.id, status: 'failed', error: 'timeout' });
     }
-    return NextResponse.json({ id: c.id, status: c.status, outputs: c.outputs, error: c.error, assets: c.assets, prompt: c.prompt, templateId: c.templateId, inputImage: c.inputImage, createdAt: c.createdAt });
+    return NextResponse.json({ id: c.id, status: c.status, outputs: normalizeOutputs(c.outputs), error: c.error, assets: c.assets, prompt: c.prompt, templateId: c.templateId, inputImage: c.inputImage, createdAt: c.createdAt });
   }
 
   try {
@@ -67,7 +76,8 @@ async function __byokGET(_req: Request, { params }: { params: { id: string } }) 
       return NextResponse.json({ id: c.id, status: 'failed', error: p.error });
     }
     return NextResponse.json({ id: c.id, status: 'processing' });
-  } catch {
+  } catch (e) {
+    console.error('[creations/id] poll/update error:', String(e));
     // Transient poll error — keep the client polling.
     return NextResponse.json({ id: c.id, status: 'processing' });
   }
