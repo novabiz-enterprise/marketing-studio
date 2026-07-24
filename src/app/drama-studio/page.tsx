@@ -34,7 +34,7 @@ type ShotState = { img: 'idle' | 'run' | 'done' | 'fail'; vid: 'idle' | 'run' | 
 type AssetState = { status: 'idle' | 'run' | 'done' | 'fail'; url?: string; getUrl?: string; err?: string };
 // 用户上传的产品图(可选):作为带货镜头的参考图,锁住真实产品外观。preview 为本地 blob 预览,url 为上传后可引用地址。
 type UploadAsset = { preview?: string; url?: string; uploading?: boolean }; // 用户上传的产品原图(直接作参考,不再定妆生成)
-// Wan 2.7 单次最多 7 张参考图;每镜 refs = 产品图 + 出场角色定妆图 + 场景图。
+// HappyHorse 1.1 单次最多提交 7 张参考图;每镜 refs = 产品图 + 出场角色定妆图 + 场景图。
 // 角色与场景优先,产品图按剩余配额动态截断。
 const MAX_SHOT_REFS = 7;
 const MAX_PRODUCT_IMAGES = 4;
@@ -50,8 +50,8 @@ const CHEVRON = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/s
 const selStyle: React.CSSProperties = { backgroundImage: CHEVRON, backgroundPosition: 'right 8px center', backgroundSize: '10px', backgroundRepeat: 'no-repeat' };
 // script/image(定妆图+场景图)走固定 COST;逐镜视频走动态 videoCredits(见 segVideoCost/videoEst)。
 const DRAMA_COSTS = { script: 5, image: 8, video: 12 };
-// 逐镜出片模型:Wan 2.7(产品图+角色定妆图+场景图 → 直接出片),与后端一致。
-const DRAMA_VIDEO_MODEL = 'alibaba/wan-2.7';
+// 逐镜出片模型:HappyHorse 1.1(产品图+角色定妆图+场景图 → 直接出片),与后端一致。
+const DRAMA_VIDEO_MODEL = 'alibaba/happyhorse-1.1';
 function dramaErrText(code: string, t: (key: string, vars?: Record<string, string | number>) => string) {
   if (code.startsWith('insufficient_credits:')) {
     const [, need, have] = code.split(':');
@@ -137,7 +137,7 @@ export default function DramaStudioPage() {
   const [charAssets, setCharAssets] = useState<Record<string, AssetState>>({});
   const [sceneAsset, setSceneAsset] = useState<AssetState>({ status: 'idle' });
   // 用户上传的产品图(可选,跨剧本保留):带货镜头合成时作参考锁产品一致性。
-  const [productAssets, setProductAssets] = useState<UploadAsset[]>([]); // 多张产品原图(直接作 Wan 视频参考)
+  const [productAssets, setProductAssets] = useState<UploadAsset[]>([]); // 多张产品原图(直接作 HappyHorse 视频参考)
   const [zoomImg, setZoomImg] = useState<string | null>(null); // 角色/场景/产品图点击放大预览
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -405,7 +405,7 @@ export default function DramaStudioPage() {
         ls = { status: 'fail', err: e instanceof Error ? e.message : 'failed' }; setSceneAsset({ ...ls });
       }
     })());
-      // 产品图:直接用用户上传的多张原图作 Wan 视频参考,不再自动生成"定妆图"(用户要求用原图保真)。
+      // 产品图:直接用用户上传的多张原图作 HappyHorse 视频参考,不再自动生成"定妆图"(用户要求用原图保真)。
     const productUrls = productAssets.map((p) => p.url).filter((u): u is string => !!u);
     await Promise.all(jobs);
     void patchDramaAssets(lc, ls, shotsRef.current, productUrls); // 定妆/场景/产品图完成 → 更新文件夹
@@ -490,7 +490,7 @@ export default function DramaStudioPage() {
       // 组参考图 + @imageN 绑定:产品图(带货段)+ 出场角色定妆图 + 场景图,一次性喂 reference-to-video 直接出片
       // (不再先 edit 合成首帧再 i2v —— 少一步损耗,产品/角色/场景一致性由多参考锁定)。
       // refs 顺序 = 产品图 + 出场角色定妆图 + 场景图,喂 reference-to-video;@imageN 按顺序绑定。
-      // Wan 上限 7:角色与场景一致性最关键,先占位;产品图用剩余配额,超出按配额截断。
+      // OpenRouter 参考图上限 7:角色与场景一致性最关键,先占位;产品图用剩余配额,超出按配额截断。
       const prodRefs = ctx?.products ?? productAssets.map((p) => p.url).filter((u): u is string => !!u);
       const castUrls = (seg.cast || []).map((k) => ({ k, u: chars[k]?.url })).filter((x): x is { k: string; u: string } => !!x.u);
       const sceneUsed = scene.url ? 1 : 0;

@@ -22,8 +22,8 @@ const LIME = '#7036F0';
 const INK = '#131416'; // lime 底上的近黑字(与页面底色一致)
 const PANEL = '#1c1e21';
 const COSTS = { plan: 3, image: 5, video: 12 };
-// 视频模型:OpenRouter Wan 2.7,与后端 REPLICA_VIDEO_MODEL 白名单一致。
-const REPLICA_VIDEO_MODEL = 'alibaba/wan-2.7';
+// 视频模型:OpenRouter HappyHorse 1.1,与后端 REPLICA_VIDEO_MODEL 白名单一致。
+const REPLICA_VIDEO_MODEL = 'alibaba/happyhorse-1.1';
 
 async function postJson(url: string, body: unknown) {
   const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...byokHeaders() }, body: JSON.stringify(body) });
@@ -369,7 +369,7 @@ export default function MarketingStudioPage() {
         ratio: directPlan.ratio,
         resolution: videoResolution,
         duration: videoDuration,
-        model: REPLICA_VIDEO_MODEL, // 统一 Wan 2.7 i2v/reference-to-video(prompt 带台词 + generate_audio):复刻和手动扩写都能对口型出口播
+        model: REPLICA_VIDEO_MODEL, // 统一 HappyHorse 1.1 i2v/reference-to-video(prompt 带台词 + generate_audio):复刻和手动扩写都能对口型出口播
       });
       local.vidGetUrl = vd.getUrl;
       setShots([{ ...local }]);

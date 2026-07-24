@@ -9,8 +9,8 @@ import { videoCredits } from '@/lib/video-pricing';
 import { useI18n } from '@/i18n/provider';
 
 const COSTS = { plan: 4 };
-// 视频步骤动态计费(Wan 2.7 固定 720p/15s),与后端 ad-skit/video route 一致;plan/image 仍走固定 COST。
-const VIDEO_COST = videoCredits('alibaba/wan-2.7', '720p', 15);
+// 视频步骤动态计费(HappyHorse 1.1 固定 720p/15s),与后端 ad-skit/video route 一致;plan/image 仍走固定 COST。
+const VIDEO_COST = videoCredits('alibaba/happyhorse-1.1', '720p', 15);
 // 语言选择已移除:剧本语种自动跟随产品输入的语言(见 lib/ad-skit.ts planSkit)
 const STYLES = [
   { key: 'funny', label: 'Funny meme' }, { key: 'reversal', label: 'Wild plot twist' }, { key: 'skit', label: 'Sitcom skit' },
