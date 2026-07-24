@@ -12,7 +12,7 @@ export const metadata: Metadata = {
   title: 'InstaTak - AI E-commerce Ad Studio',
   description:
     'InstaTak is an AI e-commerce ad studio for UGC product ads, reference-ad remakes, AI drama ads, and ad skits.',
-  // Atlas OSS force-downloads media when a Referer is sent — drop it so <img>/<video> render inline.
+  // Some provider media URLs force-download when a Referer is sent; drop it so <img>/<video> render inline.
   referrer: 'no-referrer',
 };
 

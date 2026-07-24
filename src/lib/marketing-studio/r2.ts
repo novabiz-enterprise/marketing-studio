@@ -1,8 +1,8 @@
 import { getCloudflareContext } from '@opennextjs/cloudflare';
-import { mediaFetchHeadersForUrl } from '@/lib/atlas';
+import { mediaFetchHeadersForUrl } from '@/lib/openrouter';
 
-// Atlas 生成结果落在带 force-download/防盗链/8天过期/无CORS 的临时 OSS,网页播不了。
-// 这里把它转存到我们自己的 R2(marketing-studio-media),返回同源、可内联播放、不过期的 url。
+// Provider outputs can be temporary/download-only. Store them in our own R2
+// bucket and return same-origin, inline-playable URLs when available.
 // 转存失败时回退原 url(至少不让生成整个 break)。
 function ascii(bytes: Uint8Array, start: number, end: number): string {
   return String.fromCharCode(...bytes.slice(start, end));
@@ -76,6 +76,7 @@ export async function persistToR2(sourceUrl: string): Promise<string> {
 // 从 R2 读一张媒体图转成 base64 data URI:给多模态 LLM 内联用。
 // 直接内联而不是把 /media/ URL 丢给 LLM,是因为海外 LLM(gemini)拉 workers.dev 图常超时(实测扩写卡死即此因)。
 export async function mediaToDataUri(url: string): Promise<string> {
+  if (url.startsWith('data:image/')) return url;
   const m = /\/media\/([^/?#]+)/.exec(url || '');
   if (!m) return '';
   try {

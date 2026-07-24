@@ -1,23 +1,22 @@
-import { withAtlas } from '@/lib/request-context';
+import { withProviderKeys } from '@/lib/request-context';
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { marketingPlanSchema } from '@/lib/marketing-studio/schema';
-import { buildShotImagePrompt, buildShotImageEditPrompt, normalizeRatio, submitShotImage, MK_IMAGE_COST, SHOT_IMAGE_MODEL, SHOT_IMAGE_EDIT_MODEL } from '@/lib/marketing-studio/workflow';
-import { chargeAndSubmit, chargeErrorResponse } from '@/lib/marketing-studio/gen-task';
+import { buildShotImagePrompt, buildShotImageEditPrompt, normalizeRatio, submitShotImage, MK_IMAGE_COST } from '@/lib/marketing-studio/workflow';
+import { chargeErrorResponse, chargeSync, refundSync } from '@/lib/marketing-studio/gen-task';
 
 export const maxDuration = 60;
 
-// 产品图/头像图可能是本站相对路径(/api/marketing-studio/media/...),但 Atlas edit 需要公网绝对 URL。
-// 之前用 /^https?:\/\// 直接过滤掉相对路径 → refImages 为空 → 出图退回纯文生图、根本没用上传的产品图
-// (用户实测"根本没参考传入的图片"即此因)。这里把本站相对路径按请求来源补成绝对 URL。
+// OpenRouter image references can be HTTPS URLs or data:image base64 URLs.
 function toAbsMedia(v: unknown, base: string): string {
   const s = typeof v === 'string' ? v.trim() : '';
+  if (s.startsWith('data:image/')) return s;
   if (s.startsWith('/api/marketing-studio/media/')) return new URL(s, base).toString();
   return /^https?:\/\//.test(s) ? s : '';
 }
 
-// 逐镜出图(nano-banana):需登录 + 扣 MK_IMAGE_COST;提交失败退款、异步失败由 poll 退款,Atlas 报错透传。
+// 逐镜出图:OpenRouter Images API is synchronous, so no provider job polling is needed.
 async function __byokPOST(req: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
@@ -48,19 +47,17 @@ async function __byokPOST(req: Request) {
   const prompt = `${base} ABSOLUTELY NO text of any kind in the image: no speech bubbles, no captions, no subtitles, no dialogue text, no logo, no watermark.`;
 
   try {
-    const submit = await chargeAndSubmit({
-      uid,
-      cost: MK_IMAGE_COST,
-      ref: 'marketing:shot-image',
-      templateId: 'mk-shot',
-      model: useEdit ? SHOT_IMAGE_EDIT_MODEL : SHOT_IMAGE_MODEL,
-      prompt,
-      submit: () => submitShotImage(prompt, ratio, refImages),
-    });
-    return NextResponse.json({ id: submit.id, getUrl: submit.getUrl });
+    await chargeSync(uid, MK_IMAGE_COST, 'marketing:shot-image');
+    try {
+      const url = await submitShotImage(prompt, ratio, refImages);
+      return NextResponse.json({ url });
+    } catch (e) {
+      await refundSync(uid, MK_IMAGE_COST, 'marketing:shot-image');
+      throw e;
+    }
   } catch (e) {
     return chargeErrorResponse(e, 'marketing/shot-image');
   }
 }
 
-export const POST = withAtlas(__byokPOST);
+export const POST = withProviderKeys(__byokPOST);

@@ -1,4 +1,4 @@
-import { atlasChat, DEFAULT_CHAT_MODEL } from '@/lib/atlas';
+import { DEFAULT_CHAT_MODEL, openRouterChat } from '@/lib/openrouter';
 import { getFormat } from './formats';
 import { getHook } from './hooks';
 import { getSetting } from './settings';
@@ -70,7 +70,7 @@ function buildUserPrompt(input: PlanInput): string {
 }
 
 export async function draftMarketingPlan(input: PlanInput): Promise<MarketingPlan> {
-  const raw = await atlasChat(
+  const raw = await openRouterChat(
     [
       { role: 'system', content: SYS },
       { role: 'user', content: buildUserPrompt(input) },

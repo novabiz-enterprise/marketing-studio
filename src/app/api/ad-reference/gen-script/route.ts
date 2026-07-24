@@ -1,8 +1,8 @@
-import { withAtlas } from '@/lib/request-context';
+import { withProviderKeys } from '@/lib/request-context';
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { atlasChat, DEFAULT_CHAT_MODEL } from '@/lib/atlas';
+import { DEFAULT_CHAT_MODEL, openRouterChat } from '@/lib/openrouter';
 import { mediaToDataUri } from '@/lib/marketing-studio/r2';
 
 export const maxDuration = 60;
@@ -35,7 +35,7 @@ async function __byokPOST(req: Request) {
   if (avatarImg) parts.push({ type: 'image_url', image_url: { url: avatarImg } });
 
   try {
-    const raw = await atlasChat([{ role: 'system', content: sys }, { role: 'user', content: parts }], MODEL, 800, 55000);
+    const raw = await openRouterChat([{ role: 'system', content: sys }, { role: 'user', content: parts }], MODEL, 800, 55000);
     const script = (raw || '').trim().replace(/^```[a-z]*\n?|\n?```$/g, '').replace(/^["“”']|["“”']$/g, '').trim();
     if (!script) return NextResponse.json({ error: 'empty_output' }, { status: 502 });
     return NextResponse.json({ script });
@@ -44,4 +44,4 @@ async function __byokPOST(req: Request) {
   }
 }
 
-export const POST = withAtlas(__byokPOST);
+export const POST = withProviderKeys(__byokPOST);

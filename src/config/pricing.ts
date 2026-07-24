@@ -7,7 +7,7 @@ export interface CreditPack {
 }
 
 // Credit packs your end-users buy. Credits are YOUR in-app currency —
-// set the price to whatever margin you want over Atlas's per-call cost.
+// set the price to whatever margin you want over the provider's per-call cost.
 export const CREDIT_PACKS: CreditPack[] = [
   { id: 'starter', name: 'Starter', credits: 100, priceUsd: 9 },
   { id: 'pro', name: 'Pro', credits: 600, priceUsd: 39, highlight: true },

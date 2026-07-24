@@ -1,9 +1,9 @@
-import { withAtlas } from '@/lib/request-context';
+import { withProviderKeys } from '@/lib/request-context';
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { pollOnce } from '@/lib/atlas';
+import { pollOnce } from '@/lib/openrouter';
 import { grantCredits } from '@/lib/credits';
 import { persistToR2 } from '@/lib/marketing-studio/r2';
 
@@ -73,5 +73,5 @@ async function __byokGET(_req: Request, { params }: { params: { id: string } }) 
   }
 }
 
-export const POST = withAtlas(__byokPOST);
-export const GET = withAtlas(__byokGET);
+export const POST = withProviderKeys(__byokPOST);
+export const GET = withProviderKeys(__byokGET);

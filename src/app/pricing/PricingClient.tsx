@@ -60,7 +60,7 @@ export default function PricingClient({
       if (r.ok) {
         setMsg({ text: t('pricing.added', { n: j.amount }), ok: true });
         setCode('');
-        window.dispatchEvent(new Event('atlas:credits'));
+        window.dispatchEvent(new Event('credits:update'));
       } else {
         setMsg({ text: `${t('pricing.redeemFailed')}: ${j.error || 'invalid code'}`, ok: false });
       }
@@ -141,7 +141,7 @@ export default function PricingClient({
               <input
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
-                placeholder="ATLAS-XXXX-XXXX"
+                placeholder="CODE-XXXX-XXXX"
                 className="flex-1 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-sm text-white outline-none transition focus:border-[#7036F0] focus:ring-1 focus:ring-[#7036F0]"
               />
               <button onClick={redeem} disabled={busy === 'redeem' || !code} className="rounded-xl px-4 py-2.5 text-sm font-bold text-white transition hover:brightness-110 disabled:opacity-50" style={{ background: '#7036F0' }}>

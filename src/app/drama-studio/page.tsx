@@ -28,7 +28,7 @@ type Script = {
   segments?: { i: number; durationSec?: number; cast?: string[]; product?: boolean; scene: string; action: string; dialogue?: string; hook?: string }[];
   climax?: string;
 };
-// imgGetUrl/vidGetUrl = Atlas 任务查询地址:提交后立刻持久化,刷新/中断后凭它恢复轮询,不重复提交扣费。
+// imgGetUrl/vidGetUrl = provider task URL for async video jobs; OpenRouter image jobs return data URLs directly.
 type ShotState = { img: 'idle' | 'run' | 'done' | 'fail'; vid: 'idle' | 'run' | 'done' | 'fail'; imgUrl?: string; vidUrl?: string; imgGetUrl?: string; vidGetUrl?: string; err?: string };
 // 角色定妆图 / 场景图资产:先于分镜生成,作为逐镜合成的参考图锁一致性。getUrl 同样持久化以便续跑。
 type AssetState = { status: 'idle' | 'run' | 'done' | 'fail'; url?: string; getUrl?: string; err?: string };
@@ -58,7 +58,7 @@ function dramaErrText(code: string, t: (key: string, vars?: Record<string, strin
     return t('dramaStudio.errors.notEnough', { need, have });
   }
   if (code === 'insufficient_credits') return t('dramaStudio.errors.insufficientCredits');
-  if (code.includes('Atlas chat timed out')) return t('dramaStudio.errors.chatTimeout');
+  if (code.includes('OpenRouter chat timed out')) return t('dramaStudio.errors.chatTimeout');
   if (code.startsWith('script_timeout_refunded')) return t('dramaStudio.errors.scriptTimeoutRefunded');
   if (code.startsWith('script_failed_refunded')) return t('dramaStudio.errors.scriptFailedRefunded');
   return code;
@@ -80,6 +80,7 @@ function imageToDataUrl(file: File): Promise<string> {
   });
 }
 function pollGen(getUrl: string): Promise<string> {
+  if (getUrl.startsWith('data:image/')) return Promise.resolve(getUrl);
   return new Promise((resolve, reject) => {
     let n = 0;
     let transientErrors = 0;
@@ -89,7 +90,7 @@ function pollGen(getUrl: string): Promise<string> {
       if (n > 300) { clearInterval(t); reject(new Error('timeout')); return; }
       try {
         const c = await postJson('/api/marketing-studio/poll', { getUrl });
-        // transient=true:Atlas 状态查询网关瞬时超时(504),任务多半还在跑;计数不清零,连续太多次才放弃(避免静默转圈到超时)。
+        // transient=true:provider 状态查询网关瞬时超时(504),任务多半还在跑;计数不清零,连续太多次才放弃(避免静默转圈到超时)。
         if (c.transient) {
           transientErrors += 1;
           if (transientErrors >= 8) { clearInterval(t); reject(new Error('poll_gateway_unstable')); }
@@ -111,6 +112,11 @@ function pollGen(getUrl: string): Promise<string> {
       }
     }, 3000);
   });
+}
+function imageResultUrl(result: { url?: string; getUrl?: string }): Promise<{ url: string; getUrl: string }> {
+  const getUrl = result.url || result.getUrl || '';
+  if (!getUrl) return Promise.reject(new Error('empty_image_output'));
+  return pollGen(getUrl).then((url) => ({ url, getUrl }));
 }
 
 export default function DramaStudioPage() {
@@ -217,8 +223,8 @@ export default function DramaStudioPage() {
     const h = () => {
       if (status === 'authenticated') void refreshCredits();
     };
-    window.addEventListener('atlas:credits', h);
-    return () => window.removeEventListener('atlas:credits', h);
+    window.addEventListener('credits:update', h);
+    return () => window.removeEventListener('credits:update', h);
   }, [status, refreshCredits]);
 
   // ── 生成进度持久化(同 marketing-studio):刷新/切页不丢现场,断点续跑 ──
@@ -256,7 +262,7 @@ export default function DramaStudioPage() {
           : s.script.segments.map(() => ({ img: 'idle', vid: 'idle' }))
         ).map((x: ShotState) => {
           // 只保留真正完成(done + url)的镜;未完成的一律复位 idle 并清掉 getUrl——
-          // 否则续跑会拿着可能已过期的旧 getUrl 一直轮询死任务、从不重新提交(实测就是"点生成没调 Atlas"的根因)。
+          // 否则续跑会拿着可能已过期的旧 getUrl 一直轮询死任务、从不重新提交。
           const imgDone = x.img === 'done' && !!x.imgUrl;
           const vidDone = x.vid === 'done' && !!x.vidUrl;
           return {
@@ -275,7 +281,7 @@ export default function DramaStudioPage() {
   useEffect(() => {
     if (!mounted) return; // 无剧本(只填了主题/传了图)也存,登录 OAuth 跳转回来不丢
     try {
-      localStorage.setItem(DRAMA_SESSION_KEY, JSON.stringify({ script, shots, charAssets, sceneAsset, productUrls: productAssets.map((p) => p.url).filter(Boolean), topic, videoRatio, videoResolution, creationId, ts: Date.now() }));
+      localStorage.setItem(DRAMA_SESSION_KEY, JSON.stringify({ script, shots, charAssets, sceneAsset, productUrls: productAssets.map((p) => p.url).filter((u): u is string => !!u && !u.startsWith('data:')), topic, videoRatio, videoResolution, creationId, ts: Date.now() }));
     } catch { /* storage full etc. */ }
   }, [mounted, script, shots, charAssets, sceneAsset, productAssets, topic, videoRatio, videoResolution, creationId]);
 
@@ -316,7 +322,7 @@ export default function DramaStudioPage() {
       setTimeout(() => storyboardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
     } catch (e) { setNotice(null); setErr(e instanceof Error ? e.message : 'script_failed'); }
     setBusy(null);
-    window.dispatchEvent(new Event('atlas:credits'));
+    window.dispatchEvent(new Event('credits:update'));
   }
   function editSeg(i: number, key: 'scene' | 'action' | 'dialogue', val: string) {
     setScript((prev) => {
@@ -341,23 +347,15 @@ export default function DramaStudioPage() {
       return { ...prev, segments: segs };
     });
   }
-  // 上传产品图(可选):复用 marketing 的上传端点(收 { dataUrl } JSON,返回 { url })。产品图跨剧本保留,不随重新生成剧本清空。
+  // 上传产品图(可选):保留为 data:image,直接作为 OpenRouter 参考图。
   async function uploadOneProduct(file: File) {
     const dataUrl = await imageToDataUrl(file);
     if (dataUrl.length > 8_000_000) { setErr('image_too_large'); return; }
-    const marker: UploadAsset = { preview: dataUrl, uploading: true };
     let added = false;
-    setProductAssets((prev) => { if (prev.length >= MAX_PRODUCT_IMAGES) return prev; added = true; return [...prev, marker]; });
+    setProductAssets((prev) => { if (prev.length >= MAX_PRODUCT_IMAGES) return prev; added = true; return [...prev, { preview: dataUrl, url: dataUrl }]; });
     if (!added) { setErr(t('dramaStudio.errors.productLimit', { max: MAX_PRODUCT_IMAGES })); return; }
-    try {
-      const j = await postJson('/api/marketing-studio/upload', { dataUrl });
-      setProductAssets((prev) => prev.map((p) => (p === marker ? { preview: dataUrl, url: j.url } : p)));
-    } catch (e) {
-      setProductAssets((prev) => prev.filter((p) => p !== marker));
-      setErr(e instanceof Error ? e.message : 'upload_failed');
-    }
   }
-  // 上传产品图(可选,多张):复用 marketing 上传端点;直接用原图作 Grok 视频参考,跨剧本保留。
+  // 上传产品图(可选,多张):直接用原图作 OpenRouter 视频参考,跨剧本保留。
   async function uploadProducts(files: FileList) {
     setErr(null);
     for (const f of Array.from(files)) await uploadOneProduct(f);
@@ -380,7 +378,9 @@ export default function DramaStudioPage() {
         if (!lc[c.key].getUrl) {
           const p = `Full-body character reference sheet of ${c.name}. ${c.appearance || c.persona}. Standing in a neutral studio, plain background, ultra-photorealistic cinematic, natural soft lighting, sharp facial detail, no text no watermark no logo.`;
           const im = await postJson('/api/drama-studio/shot-image', { prompt: p, ratio: '3:4' });
-          lc[c.key] = { ...lc[c.key], getUrl: im.getUrl }; syncChars();
+          const resolved = await imageResultUrl(im);
+          lc[c.key] = { status: 'done', url: resolved.url, getUrl: resolved.getUrl }; syncChars();
+          return;
         }
         const url = await pollGen(lc[c.key].getUrl!);
         lc[c.key] = { status: 'done', url, getUrl: lc[c.key].getUrl }; syncChars();
@@ -395,7 +395,9 @@ export default function DramaStudioPage() {
         if (!ls.getUrl) {
           const p = `${script?.sceneImagePrompt || script?.setting || 'cinematic establishing shot'}. Cinematic establishing shot, wide angle, no people, dramatic lighting, film grain, no text no watermark.`;
           const im = await postJson('/api/drama-studio/shot-image', { prompt: p, ratio: videoRatio });
-          ls = { ...ls, getUrl: im.getUrl }; setSceneAsset({ ...ls });
+          const resolved = await imageResultUrl(im);
+          ls = { status: 'done', url: resolved.url, getUrl: resolved.getUrl }; setSceneAsset({ ...ls });
+          return;
         }
         const url = await pollGen(ls.getUrl!);
         ls = { status: 'done', url, getUrl: ls.getUrl }; setSceneAsset({ ...ls });
@@ -424,7 +426,7 @@ export default function DramaStudioPage() {
       await runAssets();
     } finally {
       setBusy(null);
-      window.dispatchEvent(new Event('atlas:credits'));
+      window.dispatchEvent(new Event('credits:update'));
     }
   }
 
@@ -438,16 +440,16 @@ export default function DramaStudioPage() {
     try {
       const p = `Full-body character reference sheet of ${c.name}. ${c.appearance || c.persona}. Standing in a neutral studio, plain background, ultra-photorealistic cinematic, natural soft lighting, sharp facial detail, no text no watermark no logo.`;
       const im = await postJson('/api/drama-studio/shot-image', { prompt: p, ratio: '3:4' });
-      const url = await pollGen(im.getUrl);
+      const resolved = await imageResultUrl(im);
       setCharAssets((prev) => {
-        const next = { ...prev, [key]: { status: 'done' as const, url, getUrl: im.getUrl } };
+        const next = { ...prev, [key]: { status: 'done' as const, url: resolved.url, getUrl: resolved.getUrl } };
         void patchDramaAssets(next, sceneAsset, shotsRef.current); // 定妆图更新 → 同步文件夹
         return next;
       });
     } catch (e) {
       setCharAssets((prev) => ({ ...prev, [key]: { status: 'fail', err: e instanceof Error ? e.message : 'failed' } }));
     } finally {
-      window.dispatchEvent(new Event('atlas:credits'));
+      window.dispatchEvent(new Event('credits:update'));
     }
   }
   // 编辑某角色的英文外观提示词(改完点"重新生成"出新定妆图)。
@@ -463,14 +465,14 @@ export default function DramaStudioPage() {
     try {
       const p = `${script.sceneImagePrompt || script.setting || 'cinematic establishing shot'}. Cinematic establishing shot, wide angle, no people, dramatic lighting, film grain, no text no watermark.`;
       const im = await postJson('/api/drama-studio/shot-image', { prompt: p, ratio: videoRatio });
-      const url = await pollGen(im.getUrl);
-      const done: AssetState = { status: 'done', url, getUrl: im.getUrl };
+      const resolved = await imageResultUrl(im);
+      const done: AssetState = { status: 'done', url: resolved.url, getUrl: resolved.getUrl };
       setSceneAsset(done);
       void patchDramaAssets(charAssets, done, shotsRef.current); // 场景图更新 → 同步文件夹
     } catch (e) {
       setSceneAsset({ status: 'fail', err: e instanceof Error ? e.message : 'failed' });
     } finally {
-      window.dispatchEvent(new Event('atlas:credits'));
+      window.dispatchEvent(new Event('credits:update'));
     }
   }
 
@@ -526,7 +528,7 @@ export default function DramaStudioPage() {
       setShots((prev) => prev.map((s, idx) => (idx === i ? { ...s, img: s.img === 'run' ? 'fail' : s.img, vid: s.vid === 'run' ? 'fail' : s.vid, err: msg } : s)));
       return false;
     } finally {
-      window.dispatchEvent(new Event('atlas:credits'));
+      window.dispatchEvent(new Event('credits:update'));
     }
   }
 
@@ -555,7 +557,7 @@ export default function DramaStudioPage() {
       }
     } finally {
       setBusy(null);
-      window.dispatchEvent(new Event('atlas:credits'));
+      window.dispatchEvent(new Event('credits:update'));
     }
   }
 

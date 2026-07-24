@@ -8,13 +8,6 @@ const PUBLIC_ORIGIN_ENV_KEYS = [
   'NEXTAUTH_URL',
 ] as const;
 
-export class NonPublicMediaUrlError extends Error {
-  constructor(readonly value: string) {
-    super('media_url_not_public');
-    this.name = 'NonPublicMediaUrlError';
-  }
-}
-
 function cleanOrigin(value: string | undefined): string {
   const s = (value || '').trim().replace(/\/+$/, '');
   if (!s) return '';
@@ -64,30 +57,6 @@ function publicOriginForRequest(req: Request): string {
   const fromRequest = originFromRequest(req);
   if (isPublicHttpUrl(fromRequest)) return fromRequest;
   return configuredPublicOrigin() || fromRequest;
-}
-
-export function toAtlasMediaUrl(value: unknown, req: Request): string {
-  const s = typeof value === 'string' ? value.trim() : '';
-  if (!s) return '';
-
-  if (s.startsWith(MEDIA_PATH_PREFIX)) {
-    const origin = publicOriginForRequest(req);
-    if (!isPublicHttpUrl(origin)) throw new NonPublicMediaUrlError(s);
-    return new URL(s, origin).toString();
-  }
-
-  if (/^https?:\/\//i.test(s)) {
-    const u = new URL(s);
-    if (u.pathname.startsWith(MEDIA_PATH_PREFIX) && !isPublicHttpUrl(u.origin)) {
-      const origin = configuredPublicOrigin();
-      if (origin) return new URL(`${u.pathname}${u.search}`, origin).toString();
-      throw new NonPublicMediaUrlError(s);
-    }
-    if (!isPublicHttpUrl(s)) throw new NonPublicMediaUrlError(s);
-    return s;
-  }
-
-  return '';
 }
 
 export function sameOriginMediaPath(value: unknown, req: Request): string {

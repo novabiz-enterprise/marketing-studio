@@ -2,7 +2,7 @@ import { getCloudflareContext } from '@opennextjs/cloudflare';
 
 export const dynamic = 'force-dynamic';
 
-// 从 R2 读转存好的媒体,加 CORS + 可内联播放头(去掉 Atlas OSS 的 force-download)。
+// 从 R2 读转存好的媒体,加 CORS + 可内联播放头。
 // 关键:支持 HTTP Range(206) —— <video> 元素播放必须靠 range 分段,否则加载不出来。
 type R2HeadLike = {
   size: number;

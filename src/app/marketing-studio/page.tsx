@@ -39,8 +39,9 @@ function imageToDataUrl(file: File): Promise<string> {
     r.readAsDataURL(file);
   });
 }
-// 代理轮询 Atlas 任务(无数据库):后端 /poll 用 key 查 getUrl 状态并回传。
+// 代理轮询 OpenRouter video jobs:后端 /poll 用 key 查 getUrl 状态并回传。
 function pollGen(getUrl: string): Promise<string> {
+  if (getUrl.startsWith('data:image/')) return Promise.resolve(getUrl);
   return new Promise((resolve, reject) => {
     let n = 0;
     let transientErrors = 0;
@@ -50,7 +51,7 @@ function pollGen(getUrl: string): Promise<string> {
       if (n > 300) { clearInterval(t); reject(new Error('timeout')); return; }
       try {
         const c = await postJson('/api/marketing-studio/poll', { getUrl });
-        // transient=true:Atlas 状态查询网关瞬时超时(504),任务多半还在跑;计数不清零,连续太多次才放弃(避免静默转圈到超时)。
+        // transient=true:provider 状态查询网关瞬时超时(504),任务多半还在跑;计数不清零,连续太多次才放弃(避免静默转圈到超时)。
         if (c.transient) {
           transientErrors += 1;
           if (transientErrors >= 8) { clearInterval(t); reject(new Error('poll_gateway_unstable')); }
@@ -88,7 +89,7 @@ function errText(code: string, t: (key: string, vars?: Record<string, string | n
   return t('marketingStudio.errors.somethingWrong', { code });
 }
 
-// imgGetUrl/vidGetUrl = Atlas 任务查询地址:提交后立刻持久化,刷新/中断后凭它恢复轮询,不重复提交扣费。
+// imgGetUrl/vidGetUrl = provider task URL:提交后立刻持久化,刷新/中断后凭它恢复轮询,不重复提交扣费。
 type ShotState = { img: 'idle' | 'run' | 'done' | 'fail'; vid: 'idle' | 'run' | 'done' | 'fail'; imgUrl?: string; vidUrl?: string; imgGetUrl?: string; vidGetUrl?: string };
 // 生成进度持久化 key:plan/视频状态存 localStorage,刷新或切页回来自动恢复现场、断点续跑。
 const MK_SESSION_KEY = 'mk-session-v1';
@@ -171,7 +172,7 @@ export default function MarketingStudioPage() {
   const visibleFormats = useMemo(() => (category === 'all' ? AD_FORMATS : AD_FORMATS.filter((f) => f.category === category)), [category]);
   // 视频步骤动态计费(按当前选的分辨率/时长实时算);首帧图仍走固定 COST.image。
   const videoCost = videoCredits(REPLICA_VIDEO_MODEL, videoResolution, videoDuration);
-  const shotCost = COSTS.image + videoCost;
+  const shotCost = videoCost;
   const hasCreditsForVideo = byokActive || status !== 'authenticated' || credits === null || credits >= shotCost;
 
   const refreshCredits = useCallback(async () => {
@@ -201,8 +202,8 @@ export default function MarketingStudioPage() {
     const h = () => {
       if (status === 'authenticated') void refreshCredits();
     };
-    window.addEventListener('atlas:credits', h);
-    return () => window.removeEventListener('atlas:credits', h);
+    window.addEventListener('credits:update', h);
+    return () => window.removeEventListener('credits:update', h);
   }, [status, refreshCredits]);
 
   // ── 生成进度持久化:刷新/切页不丢现场 ──
@@ -233,7 +234,7 @@ export default function MarketingStudioPage() {
       if (s.plan?.shots?.length) {
         setPlan(s.plan);
         const first = Array.isArray(s.shots) && s.shots[0] ? s.shots[0] : { img: 'idle', vid: 'idle' };
-        // 未完成的镜清掉 getUrl,续跑重新提交,不轮询可能已过期的旧任务(否则"点生成没调 Atlas")
+        // 未完成的镜清掉 getUrl,续跑重新提交,不轮询可能已过期的旧任务。
         const imgDone = first.img === 'done' && !!first.imgUrl;
         const vidDone = first.vid === 'done' && !!first.vidUrl;
         setShots([{
@@ -254,7 +255,7 @@ export default function MarketingStudioPage() {
       localStorage.setItem(MK_SESSION_KEY, JSON.stringify({
         plan, shots, product, formatId, hookId, settingId, avatarId, replica,
         videoRatio, videoResolution, videoDuration, creationId,
-        productUrls: productAssets.map((a) => a.url).filter(Boolean), avatarUrl: avatarAsset.url || '', // 图只存 R2/同源 url(blob preview 重载即失效)
+        productUrls: productAssets.map((a) => a.url).filter((u): u is string => !!u && !u.startsWith('data:')), avatarUrl: avatarAsset.url?.startsWith('data:') ? '' : avatarAsset.url || '',
         ts: Date.now(),
       }));
     } catch { /* storage full etc. */ }
@@ -269,23 +270,10 @@ export default function MarketingStudioPage() {
     catch (e) { setErr(e instanceof Error ? e.message : 'upload_failed'); return; }
     if (dataUrl.length > 8_000_000) { setErr('image_too_large'); return; }
     if (kind === 'avatar') {
-      setAvatarAsset({ preview: dataUrl, uploading: true });
-      try {
-        const j = await postJson('/api/marketing-studio/upload', { dataUrl });
-        setAvatarAsset({ preview: dataUrl, url: j.url, uploading: false });
-      } catch (e) { setAvatarAsset({}); setErr(e instanceof Error ? e.message : 'upload_failed'); }
+      setAvatarAsset({ preview: dataUrl, url: dataUrl, uploading: false });
       return;
     }
-    // 产品图:追加到数组(可多张)。用对象引用定位这张,完成/失败只改这张。
-    const slot: Asset = { preview: dataUrl, uploading: true };
-    setProductAssets((prev) => [...prev, slot]);
-    try {
-      const j = await postJson('/api/marketing-studio/upload', { dataUrl });
-      setProductAssets((prev) => prev.map((a) => (a === slot ? { preview: dataUrl, url: j.url, uploading: false } : a)));
-    } catch (e) {
-      setProductAssets((prev) => prev.filter((a) => a !== slot));
-      setErr(e instanceof Error ? e.message : 'upload_failed');
-    }
+    setProductAssets((prev) => [...prev, { preview: dataUrl, url: dataUrl, uploading: false }]);
   }
 
   useEffect(() => {
@@ -365,28 +353,18 @@ export default function MarketingStudioPage() {
         setCreationId(cid);
       } catch { /* 占位失败不阻断生成 */ }
 
-      setCompose({ status: 'run', frac: 0.15, note: t('marketingStudio.generatingFirstFrame'), url: '' });
-      local.img = 'run';
-      setShots([{ ...local }]);
-      const im = await postJson('/api/marketing-studio/shot-image', {
-        plan: directPlan,
-        shotIndex: 0,
-        productUrls: productAssets.map((a) => a.url).filter(Boolean),
-        avatarUrl: avatarAsset.url || '',
-        promptOverride: (replica ? replica.imgPrompt : product.trim()) + sceneAdd, // 出图 prompt:复刻用配方构图,手动/扩写用文本框内容
-      });
-      local.imgGetUrl = im.getUrl;
-      setShots([{ ...local }]);
-      const imgUrl = await pollGen(local.imgGetUrl!);
+      const referenceImages = [avatarAsset.url, ...productAssets.map((a) => a.url)].filter((u): u is string => !!u);
+      const imgUrl = referenceImages[0] || '';
       local.img = 'done';
       local.imgUrl = imgUrl;
       setShots([{ ...local }]);
 
-      setCompose({ status: 'run', frac: 0.48, note: t('marketingStudio.generatingVideo'), url: '' });
+      setCompose({ status: 'run', frac: 0.25, note: t('marketingStudio.generatingVideo'), url: '' });
       local.vid = 'run';
       setShots([{ ...local }]);
       const vd = await postJson('/api/marketing-studio/shot-video', {
-        imageUrl: imgUrl,
+        referenceImages,
+        allowTextToVideo: referenceImages.length === 0,
         prompt: product.trim() + sceneAdd + hookAdd + ' No subtitles, no captions, no on-screen text or watermark.', // 视频 prompt = 文本框内容 + 场景 + 钩子;明确禁字幕
         ratio: directPlan.ratio,
         resolution: videoResolution,
@@ -407,7 +385,7 @@ export default function MarketingStudioPage() {
           url: vidUrl,
           title: directPlan.title || product.slice(0, 60) || 'Ad',
           type: 'marketing-studio',
-          thumbnail: imgUrl,
+          thumbnail: imgUrl.startsWith('data:') ? '' : imgUrl,
           creationId: cid,
         });
       } catch { /* ignore history save failure */ }
@@ -424,7 +402,7 @@ export default function MarketingStudioPage() {
       setCreationId('');
     }
     setBusy(null);
-    window.dispatchEvent(new Event('atlas:credits'));
+    window.dispatchEvent(new Event('credits:update'));
   }
 
   const gridBg = {
@@ -530,7 +508,7 @@ export default function MarketingStudioPage() {
             <div className="mt-3 text-center text-[11px] text-white/35">
               {byokActive
                 ? t('common.yourKeyNoCredits')
-                : t('marketingStudio.directEstimate', { total: shotCost, image: COSTS.image, video: videoCost, credits: credits ?? '·' })}
+                : t('marketingStudio.directEstimate', { total: shotCost, video: videoCost, credits: credits ?? '·' })}
             </div>
           )}
         </div>

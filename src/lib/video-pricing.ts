@@ -6,7 +6,7 @@
  * 积分 = ⌈ 每秒单价[分辨率] × 秒数 × ACCOUNT_MARKUP × MARGIN / CREDIT_USD ⌉
  */
 
-// Atlas 每秒单价(USD,未含账户 markup),来自 Grafana kubedl.model.price 的 sku+formula
+// Provider 每秒单价(USD,未含账户 markup),来自生产观测的 sku+formula
 const PER_SEC_USD: Record<string, Partial<Record<string, number>>> = {
   // 视频模型:按分辨率×秒;'*' 不会命中时列全分辨率
   'bytedance/seedance-2.0/reference-to-video': { '480p': 0.112, '720p': 0.242, '1080p': 0.544, '4k': 1.24, '720p-SR': 0.202, '1080p-SR': 0.435, '1440p-SR': 0.774 },
@@ -19,7 +19,7 @@ const PER_SEC_USD: Record<string, Partial<Record<string, number>>> = {
   'veed/lipsync':                          { '*': 0.0132 }, // 按音频/输出时长
 };
 
-export const ACCOUNT_MARKUP = 1.2; // 我们账户被 Atlas 加价 20%(model_discount,生产 96.6% 账户为此档)
+export const ACCOUNT_MARKUP = 1.2;
 export const MARGIN = 1.5;         // 目标毛利:售价 = 真实成本 × 1.5(≈50% 毛利)
 export const CREDIT_USD = 0.065;   // Pro 档 1 积分 ≈ $0.065 售价
 const MIN_VIDEO_CREDITS = 2;

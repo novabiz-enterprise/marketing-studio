@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Coins } from 'lucide-react';
 import { useMounted } from '@/lib/use-mounted';
 
-// 沉浸式深色壳右上角的积分余额徽章:读 /api/me,监听 'atlas:credits' 事件在每次扣费后刷新。
+// 沉浸式深色壳右上角的积分余额徽章:读 /api/me,监听 'credits:update' 事件在每次扣费后刷新。
 // 未登录不显示。点击进 pricing 充值。
 export function CreditBadge() {
   const { data: session } = useSession();
@@ -28,8 +28,8 @@ export function CreditBadge() {
 
   useEffect(() => {
     const h = () => refresh();
-    window.addEventListener('atlas:credits', h);
-    return () => window.removeEventListener('atlas:credits', h);
+    window.addEventListener('credits:update', h);
+    return () => window.removeEventListener('credits:update', h);
   }, [refresh]);
 
   if (!mounted || !session) return null;

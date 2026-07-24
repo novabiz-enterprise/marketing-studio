@@ -1,4 +1,4 @@
-import { withAtlas } from '@/lib/request-context';
+import { withProviderKeys } from '@/lib/request-context';
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
@@ -19,6 +19,7 @@ async function __byokPOST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const toAbs = (u: unknown): string => {
     const s = typeof u === 'string' ? u.trim() : '';
+    if (s.startsWith('data:image/')) return s;
     if (s.startsWith('/api/marketing-studio/media/')) return new URL(s, req.url).toString();
     return /^https?:\/\//.test(s) ? s : '';
   };
@@ -29,7 +30,6 @@ async function __byokPOST(req: Request) {
       : [];
   const videoPrompt = typeof body.videoPrompt === 'string' ? body.videoPrompt.slice(0, 700) : '';
   const duration = Math.max(5, Math.min(15, Number(body.duration) || 15));
-  if (!productUrls.length) return NextResponse.json({ error: 'product_url_required' }, { status: 400 });
   if (videoPrompt.length < 5) return NextResponse.json({ error: 'prompt_required' }, { status: 400 });
 
   try {
@@ -52,4 +52,4 @@ async function __byokPOST(req: Request) {
   return NextResponse.json({ id: creation.id, status: 'processing' });
 }
 
-export const POST = withAtlas(__byokPOST);
+export const POST = withProviderKeys(__byokPOST);

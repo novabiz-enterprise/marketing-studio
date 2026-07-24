@@ -2,14 +2,14 @@
 /**
  * BYOK (bring your own key) — client helper.
  *
- * The user can paste their own AtlasCloud API key; it lives ONLY in this
+ * The user can paste their own OpenRouter API key; it lives ONLY in this
  * browser's localStorage and rides along on every generation/poll request as
- * the `x-atlas-key` header. When set, the server runs generations on the user's
- * own Atlas account and deducts NO site credits (see src/lib/request-context.ts).
+ * the `x-openrouter-key` header. When set, the server runs generations on the
+ * user's own OpenRouter account and deducts NO site credits.
  */
 import { useEffect, useState } from 'react';
 
-const STORAGE_KEY = 'atlas_byok_key';
+const STORAGE_KEY = 'openrouter_byok_key';
 export const BYOK_EVENT = 'byok-change';
 
 function byokEnabled(): boolean {
@@ -46,11 +46,11 @@ export function setByokKey(k: string): void {
 /** Header bag to spread into fetch(): `{ ...byokHeaders() }`. Empty when no key. */
 export function byokHeaders(): Record<string, string> {
   const k = getByokKey();
-  return k ? { 'x-atlas-key': k } : {};
+  return k ? { 'x-openrouter-key': k } : {};
 }
 
 /**
- * React hook: true when the user has set their own Atlas key. Re-renders on
+  * React hook: true when the user has set their own OpenRouter key. Re-renders on
  * change (save/clear via the BYOK modal). Pages use it to bypass credit gates —
  * BYOK requests bill the user's own account and deduct no site credits.
  */

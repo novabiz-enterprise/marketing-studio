@@ -12,7 +12,7 @@ export async function grantCredits(
   reason: string,
   ref?: string,
 ): Promise<void> {
-  if (isByok()) return; // BYOK: user pays AtlasCloud directly — no credit movement at all.
+  if (isByok()) return; // BYOK: user pays OpenRouter directly — no credit movement at all.
   if (amount <= 0) return;
   await prisma.$transaction([
     prisma.user.update({ where: { id: userId }, data: { credits: { increment: amount } } }),
@@ -27,7 +27,7 @@ export async function deductCredits(
   reason: string,
   ref?: string,
 ): Promise<void> {
-  if (isByok()) return; // BYOK: user pays AtlasCloud directly — skip billing entirely.
+  if (isByok()) return; // BYOK: user pays OpenRouter directly — skip billing entirely.
   if (amount <= 0) return;
   // 条件原子扣减:余额不足则影响 0 行,不产生任何副作用。
   const res = await prisma.user.updateMany({

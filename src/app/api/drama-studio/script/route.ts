@@ -1,4 +1,4 @@
-import { withAtlas } from '@/lib/request-context';
+import { withProviderKeys } from '@/lib/request-context';
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
@@ -37,11 +37,11 @@ async function __byokPOST(req: Request) {
     return NextResponse.json({ script, model: DRAMA_SCRIPT_MODEL });
   } catch (e) {
     await refundSync(uid, DRAMA_SCRIPT_COST, 'drama:script');
-    console.error('[drama/script] atlas error:', String(e));
+    console.error('[drama/script] provider error:', String(e));
     const detail = String(e);
     const status = detail.includes('timed out') ? 504 : 502;
     return NextResponse.json({ error: status === 504 ? 'script_timeout_refunded' : 'script_failed_refunded', refunded: true, detail }, { status });
   }
 }
 
-export const POST = withAtlas(__byokPOST);
+export const POST = withProviderKeys(__byokPOST);

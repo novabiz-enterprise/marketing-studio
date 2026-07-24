@@ -5,7 +5,7 @@ import { getByokKey, setByokKey, BYOK_EVENT } from '@/lib/byok';
 
 /**
  * Small toolbar button + modal for BYOK. Placed on each studio page and on
- * pricing. When a key is saved, generations bill the user's Atlas account and
+ * pricing. When a key is saved, generations bill the user's OpenRouter account and
  * deduct no site credits.
  */
 export function ByokKey({ className = '' }: { className?: string }) {
@@ -67,12 +67,12 @@ export function ByokKey({ className = '' }: { className?: string }) {
               type="password"
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              placeholder="apikey-..."
+              placeholder="sk-or-..."
               autoFocus
               className="mt-4 w-full rounded-lg border border-white/15 bg-black/30 px-3 py-2 text-sm outline-none focus:border-[#7036F0]"
             />
             <a
-              href="https://atlascloud.ai?utm_source=github&utm_campaign=ecommerce-studio"
+              href="https://openrouter.ai/settings/keys"
               target="_blank"
               rel="noopener noreferrer"
               className="mt-2 inline-block text-xs text-[#a78bfa] hover:underline"

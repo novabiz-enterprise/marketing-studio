@@ -28,8 +28,8 @@ export function Navbar() {
 
   useEffect(() => {
     const h = () => refresh();
-    window.addEventListener('atlas:credits', h);
-    return () => window.removeEventListener('atlas:credits', h);
+    window.addEventListener('credits:update', h);
+    return () => window.removeEventListener('credits:update', h);
   }, [refresh]);
 
   const navLink =

@@ -1,13 +1,13 @@
-import { withAtlas } from '@/lib/request-context';
+import { withProviderKeys } from '@/lib/request-context';
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { submitShotImage, normalizeRatio, MK_IMAGE_COST, SHOT_IMAGE_MODEL, SHOT_IMAGE_EDIT_MODEL } from '@/lib/marketing-studio/workflow';
-import { chargeAndSubmit, chargeErrorResponse } from '@/lib/marketing-studio/gen-task';
+import { submitShotImage, normalizeRatio, MK_IMAGE_COST } from '@/lib/marketing-studio/workflow';
+import { chargeErrorResponse, chargeSync, refundSync } from '@/lib/marketing-studio/gen-task';
 
 export const maxDuration = 60;
 
-// 剧本分镜出图(复用 marketing 底层 nano-banana):需登录 + 扣 MK_IMAGE_COST;提交/异步失败均退款,Atlas 报错透传。
+// 剧本分镜出图:OpenRouter Images API 同步返回图片,不再提交异步 image job。
 async function __byokPOST(req: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
@@ -16,10 +16,10 @@ async function __byokPOST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const prompt = typeof body.prompt === 'string' ? body.prompt.trim().slice(0, 3000) : '';
   const ratio = normalizeRatio(body.ratio);
-  // 相对路径(本站 /api/marketing-studio/media/...)补成绝对 URL,否则被过滤掉 → refImages 空 → 退回纯文生图,
-  // 定妆图/产品/场景参考图静默失效、每镜不一致(marketing 早修过 toAbsMedia,drama 这里之前漏修)。
+  // OpenRouter accepts HTTPS image URLs and data:image base64 references.
   const toAbs = (u: unknown): string => {
     const s = typeof u === 'string' ? u.trim() : '';
+    if (s.startsWith('data:image/')) return s;
     if (s.startsWith('/api/marketing-studio/media/')) return new URL(s, req.url).toString();
     return /^https?:\/\//.test(s) ? s : '';
   };
@@ -27,19 +27,17 @@ async function __byokPOST(req: Request) {
   if (!prompt) return NextResponse.json({ error: 'prompt_required' }, { status: 400 });
 
   try {
-    const submit = await chargeAndSubmit({
-      uid,
-      cost: MK_IMAGE_COST,
-      ref: 'drama:shot-image',
-      templateId: 'drama-shot',
-      model: refImages.length ? SHOT_IMAGE_EDIT_MODEL : SHOT_IMAGE_MODEL,
-      prompt,
-      submit: () => submitShotImage(prompt, ratio, refImages),
-    });
-    return NextResponse.json({ id: submit.id, getUrl: submit.getUrl });
+    await chargeSync(uid, MK_IMAGE_COST, 'drama:shot-image');
+    try {
+      const url = await submitShotImage(prompt, ratio, refImages);
+      return NextResponse.json({ url });
+    } catch (e) {
+      await refundSync(uid, MK_IMAGE_COST, 'drama:shot-image');
+      throw e;
+    }
   } catch (e) {
     return chargeErrorResponse(e, 'drama/shot-image');
   }
 }
 
-export const POST = withAtlas(__byokPOST);
+export const POST = withProviderKeys(__byokPOST);

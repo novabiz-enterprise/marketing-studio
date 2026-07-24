@@ -1,4 +1,4 @@
-import { OPENROUTER_VIDEO_MODEL, submitOpenRouterVideo, submitRawGen } from '@/lib/atlas';
+import { isImageReferenceUrl, OPENROUTER_VIDEO_MODEL, submitOpenRouterImage, submitOpenRouterVideo } from '@/lib/openrouter';
 import type { MarketingPlan, AdShot } from './schema';
 
 /** in-app 积分成本 */
@@ -6,10 +6,8 @@ export const MK_PLAN_COST = 3;
 export const MK_IMAGE_COST = 5; // 每镜出图,按 nano-banana-2 当前约 $0.08 定价
 export const MK_VIDEO_COST = 12; // 每镜视频动态计费,真实扣费见 videoCredits
 
-export const SHOT_IMAGE_MODEL = process.env.MK_SHOT_IMAGE_MODEL || 'google/nano-banana-2/text-to-image';
-// ⚠️ 用老版 nano-banana/edit,不用 nano-banana-2/edit:实测后者服务端间歇性 400
-// "Request parameters are invalid"(6 次里挂 4 次,~50-75%),drama 首帧每镜几乎必挂;老版实测无 400、~15s 出图、质量够 UGC/短剧。
-export const SHOT_IMAGE_EDIT_MODEL = process.env.MK_SHOT_IMAGE_EDIT_MODEL || 'google/nano-banana/edit';
+export const SHOT_IMAGE_MODEL = process.env.MK_SHOT_IMAGE_MODEL || process.env.OPENROUTER_IMAGE_MODEL || 'google/gemini-3.1-flash-image';
+export const SHOT_IMAGE_EDIT_MODEL = process.env.MK_SHOT_IMAGE_EDIT_MODEL || SHOT_IMAGE_MODEL;
 export const SHOT_VIDEO_MODEL = process.env.MK_SHOT_VIDEO_MODEL || OPENROUTER_VIDEO_MODEL;
 export const REPLICA_VIDEO_MODEL = process.env.MK_REPLICA_VIDEO_MODEL || OPENROUTER_VIDEO_MODEL;
 export const SHOT_REF_VIDEO_MODEL = process.env.MK_SHOT_REF_VIDEO_MODEL || OPENROUTER_VIDEO_MODEL;
@@ -88,26 +86,15 @@ export function buildShotImageEditPrompt(plan: MarketingPlan, shot: AdShot, hasP
     .join(' ');
 }
 
-/** nano-banana 出图:有参考图走 edit(吃真图),无则 text-to-image */
+/** OpenRouter image generation: references can be HTTPS URLs or data:image base64 URLs. */
 export async function submitShotImage(prompt: string, ratio: string, refImages?: string[]) {
-  const imgs = (refImages || []).filter((u) => typeof u === 'string' && /^https?:\/\//.test(u)).slice(0, 4);
-  if (imgs.length) {
-    // ⚠️ nano-banana-2/edit 的比例参数名是 image_size(值如 '9:16'),不是 aspect_ratio。
-    // 传 aspect_ratio 或完全不传比例参数,提交都返回 200 但 GET prediction 会 400
-    // "Request parameters are invalid"(drama 首帧 edit 必现;marketing 复刻靠 promptOverride 退回 t2i 才侥幸没暴露)。
-    // 实测 image_size:'9:16' → completed。
-    return submitRawGen('generateImage', {
-      model: SHOT_IMAGE_EDIT_MODEL,
-      images: imgs,
-      prompt,
-      image_size: ratio,
-    });
-  }
-  return submitRawGen('generateImage', {
-    model: SHOT_IMAGE_MODEL,
+  const imgs = (refImages || []).filter(isImageReferenceUrl).slice(0, 14);
+  return submitOpenRouterImage({
+    model: imgs.length ? SHOT_IMAGE_EDIT_MODEL : SHOT_IMAGE_MODEL,
     prompt,
-    aspect_ratio: ratio,
-    resolution: '2k',
+    inputReferences: imgs,
+    aspectRatio: ratio,
+    resolution: '2K',
   });
 }
 
@@ -135,7 +122,7 @@ export async function submitShotRefVideo(
   prompt: string,
   opts: { ratio?: unknown; resolution?: unknown; duration?: unknown } = {},
 ) {
-  const imgs = referenceImages.filter((u) => typeof u === 'string' && /^https?:\/\//.test(u)).slice(0, 7);
+  const imgs = referenceImages.filter(isImageReferenceUrl).slice(0, 7);
   return submitOpenRouterVideo({
     model: SHOT_REF_VIDEO_MODEL,
     prompt,

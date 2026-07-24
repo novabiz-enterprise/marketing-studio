@@ -1,8 +1,8 @@
-import { withAtlas } from '@/lib/request-context';
+import { withProviderKeys } from '@/lib/request-context';
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { atlasChat, DEFAULT_CHAT_MODEL } from '@/lib/atlas';
+import { DEFAULT_CHAT_MODEL, openRouterChat } from '@/lib/openrouter';
 import { mediaToDataUri } from '@/lib/marketing-studio/r2';
 import { getFormat } from '@/lib/marketing-studio/formats';
 
@@ -51,7 +51,7 @@ async function __byokPOST(req: Request) {
   if (avatarImg) parts.push({ type: 'image_url', image_url: { url: avatarImg } });
 
   try {
-    const raw = await atlasChat(
+    const raw = await openRouterChat(
       [{ role: 'system', content: sys }, { role: 'user', content: parts }],
       MODEL, 1300, 55000,
     );
@@ -63,4 +63,4 @@ async function __byokPOST(req: Request) {
   }
 }
 
-export const POST = withAtlas(__byokPOST);
+export const POST = withProviderKeys(__byokPOST);

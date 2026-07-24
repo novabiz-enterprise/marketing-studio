@@ -8,7 +8,7 @@ import { mediaDownloadUrl } from '@/lib/media-url';
 import { videoCredits } from '@/lib/video-pricing';
 import { useI18n } from '@/i18n/provider';
 
-const COSTS = { plan: 4, image: 2, video: 25 };
+const COSTS = { plan: 4 };
 // 视频步骤动态计费(Grok Imagine Video 固定 720p/15s),与后端 ad-skit/video route 一致;plan/image 仍走固定 COST。
 const VIDEO_COST = videoCredits('x-ai/grok-imagine-video', '720p', 15);
 // 语言选择已移除:剧本语种自动跟随产品输入的语言(见 lib/ad-skit.ts planSkit)
@@ -93,7 +93,7 @@ export default function AdSkitPage() {
     try {
       const j = await postJson('/api/ad-skit/plan', { product, styleKey: style, llmModel: llm });
       setPlan(j.plan);
-      window.dispatchEvent(new Event('atlas:credits'));
+      window.dispatchEvent(new Event('credits:update'));
     } catch (e) { setErr(errText(e instanceof Error ? e.message : 'failed', t)); }
     setBusy(null);
   }
@@ -105,20 +105,16 @@ export default function AdSkitPage() {
       let productUrls: string[] = [];
       setProductImg({ status: 'processing' });
       if (uploadedImages.length) {
-        const r = await postJson('/api/ad-skit/image', { uploadedImages });
-        productUrls = (r.productUrls || []).filter(Boolean);
+        productUrls = uploadedImages.filter(Boolean);
+        setProductImg({ status: 'done', url: productUrls[0] });
       } else {
-        const ij = await postJson('/api/ad-skit/image', { imagePrompt: plan.productImagePrompt });
-        const u = await pollCreation(ij.id);
-        if (u) productUrls = [u];
+        setProductImg({ status: 'idle' });
       }
-      if (!productUrls.length) throw new Error('no_product_image');
-      setProductImg({ status: 'done', url: productUrls[0] });
       setVideo({ status: 'processing' });
       const vj = await postJson('/api/ad-skit/video', { productUrls, videoPrompt: plan.videoPrompt, duration: 15, title: plan.idea });
       const vidUrl = await pollCreation(vj.id);
       setVideo({ status: 'done', url: vidUrl });
-      window.dispatchEvent(new Event('atlas:credits'));
+      window.dispatchEvent(new Event('credits:update'));
     } catch (e) {
       setProductImg((s) => (s.status === 'processing' ? { status: 'failed' } : s));
       setVideo({ status: 'failed' });
@@ -205,7 +201,7 @@ export default function AdSkitPage() {
               <div className="rounded-lg bg-white/[0.04] p-3 text-sm leading-6 text-white/80"><b>{t('adSkit.idea')}</b>{plan.idea}</div>
               {plan.caption && <p className="text-xs text-white/50">{t('adSkit.caption')}{plan.caption}</p>}
               <button onClick={genVideo} disabled={busy !== null} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#7036F0] px-5 py-3 font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50">
-                {busy === 'video' ? <><Loader2 className="h-4 w-4 animate-spin" /> {t('adSkit.rendering')}</> : <><Sparkles className="h-4 w-4" /> {byokActive ? t('adSkit.generateAdVideo') : t('adSkit.generateAdVideoCredits', { credits: COSTS.image + VIDEO_COST })}</>}
+                {busy === 'video' ? <><Loader2 className="h-4 w-4 animate-spin" /> {t('adSkit.rendering')}</> : <><Sparkles className="h-4 w-4" /> {byokActive ? t('adSkit.generateAdVideo') : t('adSkit.generateAdVideoCredits', { credits: VIDEO_COST })}</>}
               </button>
             </div>
           )}

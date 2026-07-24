@@ -33,7 +33,7 @@ function isLargeMedia(contentType: string, ext: string): boolean {
   );
 }
 
-// Default behavior is a 302 redirect to the original Atlas/OSS URL. Proxying
+  // Default behavior is a 302 redirect to the original provider URL. Proxying
 // large media through a serverless function quickly exhausts Vercel/Workers
 // origin-transfer quotas, so only explicit small-file proxy requests are served.
 export async function GET(req: Request) {
@@ -47,8 +47,8 @@ export async function GET(req: Request) {
   } catch {
     return new Response('bad url', { status: 400 });
   }
-  // SSRF guard: only proxy Atlas media hosts.
-  if (!/(^|\.)aliyuncs\.com$|(^|\.)atlascloud\.ai$/.test(source.hostname)) {
+  // SSRF guard: only proxy known media hosts.
+  if (!/(^|\.)aliyuncs\.com$|(^|\.)openrouter\.ai$/.test(source.hostname)) {
     return new Response('forbidden', { status: 403 });
   }
 
@@ -80,7 +80,7 @@ export async function GET(req: Request) {
   return new Response(r.body, {
     headers: {
       'Content-Type': ct,
-      'Content-Disposition': `attachment; filename="atlas-creation.${safeExt}"`,
+      'Content-Disposition': `attachment; filename="instatak-creation.${safeExt}"`,
       'Cache-Control': 'public, max-age=3600',
     },
   });

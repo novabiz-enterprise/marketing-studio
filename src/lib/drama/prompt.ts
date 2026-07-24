@@ -1,4 +1,4 @@
-import { atlasChat, DEFAULT_CHAT_MODEL } from '@/lib/atlas';
+import { DEFAULT_CHAT_MODEL, openRouterChat } from '@/lib/openrouter';
 
 // 剧本默认走 OpenRouter 文本模型。DEFAULT_CHAT_MODEL 当前为 qwen/qwen3.7-plus。
 export const DRAMA_SCRIPT_MODEL = DEFAULT_CHAT_MODEL;
@@ -10,8 +10,8 @@ function envInt(value: string | undefined, fallback: number, min: number, max: n
 }
 
 // Cloudflare request still needs a little time to refund and return a clear error before the 120s edge.
-// Default to waiting for the real Atlas script as long as practical.
-const SCRIPT_TIMEOUT_MS = envInt(process.env.DRAMA_SCRIPT_TIMEOUT_MS || process.env.ATLASCLOUD_CHAT_TIMEOUT_MS, 110_000, 10_000, 115_000);
+// Default to waiting for the real OpenRouter script as long as practical.
+const SCRIPT_TIMEOUT_MS = envInt(process.env.DRAMA_SCRIPT_TIMEOUT_MS || process.env.OPENROUTER_CHAT_TIMEOUT_MS, 110_000, 10_000, 115_000);
 const SCRIPT_MAX_TOKENS = envInt(process.env.DRAMA_SCRIPT_MAX_TOKENS, 6_500, 4_000, 12_000);
 
 // 影视 IP 混搭/角色反差的风格预设(源自 multiref-demo/gen_got.py 的"权游卖纸巾"创意套路,泛化成多风格)
@@ -188,7 +188,7 @@ export async function draftScript(input: ScriptInput): Promise<DramaScript> {
   "climax": "爆点:为什么好看/会传播"
 }
 注意:①characters 2-3 个(最多4),每个的 key 用 char_a/char_b/char_c;②每段 cast 里的 key 必须是上面 characters 定义过的;③durationSec 是整数秒(4-12),按节奏定,别所有段都一样;④按上面要求的段数产出,别少给;⑤带货主题:productImagePrompt 必填且产品出镜段标 product:true(至少一半段落),全剧同一件产品;纯剧情:productImagePrompt 给空字符串、所有段 false;⑥所有字符串值里禁止出现英文双引号字符,台词一律用中文引号「」(否则 JSON 会坏、分镜会丢)。`;
-  // 质量优先主模型;它偶发 502/超时(Atlas 网关波动)时降级到更快更稳的 gemini 兜底。
+    // 质量优先主模型;它偶发 502/超时时降级到更快更稳的 gemini 兜底。
   // 两次超时之和 <Worker 120s:主模型 ~68s(实测 53s 足够)+ 兜底 44s = 112s。
   const attempts = [
     { model: DRAMA_SCRIPT_MODEL, timeout: Math.min(SCRIPT_TIMEOUT_MS, 58_000) },
@@ -197,7 +197,7 @@ export async function draftScript(input: ScriptInput): Promise<DramaScript> {
   let lastErr: unknown;
   for (const { model, timeout } of attempts) {
     try {
-      const raw = await atlasChat(
+      const raw = await openRouterChat(
         [{ role: 'system', content: SYS }, { role: 'user', content: usr }],
         model,
         SCRIPT_MAX_TOKENS, // 富 schema(每角色外观 + 多段)较长,但必须留出 Worker 恢复时间。

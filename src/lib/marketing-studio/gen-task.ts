@@ -33,9 +33,9 @@ export async function refundSync(uid: string, cost: number, ref: string): Promis
 }
 
 /**
- * 异步生成任务的统一流程:扣费 → 提交 Atlas → 落一条 processing Creation(供 poll 异步失败退款)。
+ * 异步生成任务的统一流程:扣费 → 提交 provider → 落一条 processing Creation(供 poll 异步失败退款)。
  * - 扣费失败:抛 InsufficientCreditsError / ChargeError,由路由分别转 402 / 500。
- * - 提交失败:立即退款并抛出原始 Atlas 错误(供路由透传 detail)。
+ * - 提交失败:立即退款并抛出原始 provider 错误(供路由透传 detail)。
  * - 落库失败:不影响出片,仅记日志(代价是该任务异步失败时无法自动退款)。
  * templateId 用分镜/中间步骤专用值(mk-shot/drama-shot/adref:*),避免混进「历史记录」面板。
  */
@@ -83,17 +83,17 @@ export async function chargeAndSubmit(opts: {
 }
 
 /**
- * poll 发现 Atlas 任务失败时退款。用 getUrl 精确定位落库记录(前端原样传回的 getUrl === 落库时存的
+ * poll 发现 provider 任务失败时退款。用 getUrl 精确定位落库记录(前端原样传回的 getUrl === 落库时存的
  * getUrl,不依赖对 URL 格式的解析,最可靠)。用 processing→failed 的原子转移做幂等:
  * 只有把状态从 processing 成功改成 failed 的那一次(count===1)才退款,前端多次 poll 不会重复退。
  */
-export async function refundFailedTask(getUrl: string, atlasError?: string): Promise<void> {
+export async function refundFailedTask(getUrl: string, providerError?: string): Promise<void> {
   if (!getUrl) return;
   const c = await prisma.creation.findFirst({ where: { getUrl, status: 'processing' } });
   if (!c) return;
   const upd = await prisma.creation.updateMany({
     where: { id: c.id, status: 'processing' },
-    data: { status: 'failed', error: (atlasError || '').slice(0, 500) },
+    data: { status: 'failed', error: (providerError || '').slice(0, 500) },
   });
   if (upd.count === 1 && c.cost > 0) {
     try {
@@ -126,7 +126,7 @@ export async function markTaskCompleted(getUrl: string, outputs?: string[]): Pro
   return true;
 }
 
-/** 把扣费/提交阶段的异常统一转成 HTTP 响应:余额不足→402、扣费系统错误→500、Atlas 提交失败→502(透传原文)。 */
+/** 把扣费/提交阶段的异常统一转成 HTTP 响应:余额不足→402、扣费系统错误→500、provider 提交失败→502(透传原文)。 */
 export function chargeErrorResponse(e: unknown, tag: string) {
   if (e instanceof InsufficientCreditsError) {
     return NextResponse.json({ error: 'insufficient_credits' }, { status: 402 });
@@ -135,6 +135,6 @@ export function chargeErrorResponse(e: unknown, tag: string) {
     console.error(`[${tag}] charge error:`, String(e));
     return NextResponse.json({ error: 'charge_failed', detail: String(e) }, { status: 500 });
   }
-  console.error(`[${tag}] atlas error:`, String(e));
-  return NextResponse.json({ error: 'atlas_submit_failed', detail: String(e) }, { status: 502 });
+  console.error(`[${tag}] provider error:`, String(e));
+  return NextResponse.json({ error: 'provider_submit_failed', detail: String(e) }, { status: 502 });
 }

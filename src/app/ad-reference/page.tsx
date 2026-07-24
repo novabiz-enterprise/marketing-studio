@@ -49,7 +49,7 @@ function adErrText(msg: string, t: (key: string, vars?: Record<string, string | 
   return msg;
 }
 
-// 代理轮询 Atlas 任务(无数据库):复用 marketing-studio 的 /poll(完成自动转存 R2)。
+// 代理轮询 provider jobs(无数据库):复用 marketing-studio 的 /poll(完成自动转存 R2)。
 function pollGen(getUrl: string, timeoutMs = 480_000): Promise<string> {
   return new Promise((resolve, reject) => {
     const t0 = Date.now();
@@ -59,7 +59,7 @@ function pollGen(getUrl: string, timeoutMs = 480_000): Promise<string> {
       if (Date.now() - t0 > timeoutMs) { clearInterval(t); reject(new Error(lastError || 'Generation timed out, please try again')); return; }
       try {
         const c = await postJson('/api/marketing-studio/poll', { getUrl });
-        // transient=true:Atlas 状态查询网关瞬时超时(504),任务多半还在跑;计数不清零,连续太多次才放弃(避免静默转圈到超时)。
+        // transient=true:provider 状态查询网关瞬时超时(504),任务多半还在跑;计数不清零,连续太多次才放弃(避免静默转圈到超时)。
         if (c.transient) {
           transientErrors += 1;
           if (transientErrors >= 8) { clearInterval(t); reject(new Error(lastError || 'poll_gateway_unstable')); }
@@ -159,8 +159,8 @@ export default function AdReferencePage() {
     const h = () => {
       if (status === 'authenticated') void refreshCredits();
     };
-    window.addEventListener('atlas:credits', h);
-    return () => window.removeEventListener('atlas:credits', h);
+    window.addEventListener('credits:update', h);
+    return () => window.removeEventListener('credits:update', h);
   }, [status, refreshCredits]);
 
   // ── 输入持久化:填的内容实时存,登录 OAuth 跳转/刷新回来都不丢(视频/图只存 url,blob preview 重载即失效) ──
@@ -337,7 +337,7 @@ export default function AdReferencePage() {
       // 作品页把这条占位标记为"失败"
       if (cid) postJson(`/api/creations/${cid}`, { status: 'failed', error: String((e as Error).message || e) }).catch(() => {});
     } finally {
-      window.dispatchEvent(new Event('atlas:credits'));
+      window.dispatchEvent(new Event('credits:update'));
     }
   }
 

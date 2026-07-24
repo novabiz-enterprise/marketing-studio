@@ -1,6 +1,6 @@
 import type { PaymentProvider } from './types';
 import { stripeProvider } from './stripe';
-import { atlasProvider } from './atlas';
+import { redeemProvider } from './redeem';
 
 export type { PaymentProvider, CheckoutArgs } from './types';
 
@@ -9,9 +9,9 @@ function selected(): string {
 }
 
 export function paymentProvider(): PaymentProvider {
-  return selected() === 'atlas' ? atlasProvider : stripeProvider;
+  return selected() === 'redeem' ? redeemProvider : stripeProvider;
 }
 
 export function paymentMode(): 'checkout' | 'redeem' {
-  return selected() === 'atlas' ? 'redeem' : 'checkout';
+  return selected() === 'redeem' ? 'redeem' : 'checkout';
 }

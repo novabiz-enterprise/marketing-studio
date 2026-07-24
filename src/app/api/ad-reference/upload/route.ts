@@ -1,11 +1,12 @@
-import { withAtlas } from '@/lib/request-context';
+import { withProviderKeys } from '@/lib/request-context';
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { getCloudflareContext } from '@opennextjs/cloudflare';
-import { AD_REF_MAX_VIDEO_BYTES, AD_REF_MAX_IMAGE_BYTES } from '@/lib/ad-reference';
 
 export const maxDuration = 60;
+const AD_REF_MAX_VIDEO_BYTES = 60_000_000;
+const AD_REF_MAX_IMAGE_BYTES = 10_000_000;
 
 const EXT: Record<string, string> = {
   'video/mp4': 'mp4',
@@ -37,8 +38,7 @@ function sniffContentType(buffer: ArrayBuffer, declared: string): string {
   return declared;
 }
 
-// 无登录直连:参考视频/产品图/人像直接进自己的 R2(Atlas uploadMedia 对视频几 MB 就 413,不能走它)。
-// 返回同源 media url(公网可达、带 Range,Atlas 后端可直接抓取)。
+// 参考视频/产品图/人像直接进自己的 R2,返回同源 media URL。
 async function __byokPOST(req: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
@@ -71,4 +71,4 @@ async function __byokPOST(req: Request) {
   }
 }
 
-export const POST = withAtlas(__byokPOST);
+export const POST = withProviderKeys(__byokPOST);
