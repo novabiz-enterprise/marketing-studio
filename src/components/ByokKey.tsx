@@ -5,7 +5,7 @@ import { getByokKey, setByokKey, BYOK_EVENT } from '@/lib/byok';
 
 /**
  * Small toolbar button + modal for BYOK. Placed on each studio page and on
- * pricing. When a key is saved, generations bill the user's OpenRouter account and
+ * pricing. When a key is saved, generations bill the user's provider account and
  * deduct no site credits.
  */
 export function ByokKey({ className = '' }: { className?: string }) {
@@ -67,18 +67,11 @@ export function ByokKey({ className = '' }: { className?: string }) {
               type="password"
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              placeholder="sk-or-..."
+              placeholder="sk-..."
               autoFocus
               className="mt-4 w-full rounded-lg border border-white/15 bg-black/30 px-3 py-2 text-sm outline-none focus:border-[#7036F0]"
             />
-            <a
-              href="https://openrouter.ai/settings/keys"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-2 inline-block text-xs text-[#a78bfa] hover:underline"
-            >
-              {t('byok.getKey')}
-            </a>
+            <p className="mt-2 text-xs text-white/40">{t('byok.getKey')}</p>
             <div className="mt-5 flex items-center justify-between gap-3">
               <button type="button" onClick={clear} className="text-xs text-white/40 hover:text-white/70">
                 {t('byok.clear')}

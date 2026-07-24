@@ -9,7 +9,6 @@ import { useMounted } from '@/lib/use-mounted';
 import { AD_FORMATS, AD_CATEGORIES, type AdCategory } from '@/lib/marketing-studio/formats';
 import { AD_HOOKS, getHook } from '@/lib/marketing-studio/hooks';
 import { AD_SETTINGS, getSetting } from '@/lib/marketing-studio/settings';
-import { AVATAR_PRESETS, getAvatar } from '@/lib/marketing-studio/avatars';
 import { EXAMPLE_VIDEOS, EXAMPLE_RECIPES } from '@/lib/marketing-studio/examples';
 import type { MarketingPlan } from '@/lib/marketing-studio/schema';
 import { videoCredits } from '@/lib/video-pricing';
@@ -148,13 +147,11 @@ export default function MarketingStudioPage() {
   const [product, setProduct] = useState('');
   const [hookId, setHookId] = useState('none');
   const [settingId, setSettingId] = useState('none');
-  const [avatarId, setAvatarId] = useState('none');
   const [lang, setLang] = useState('英文');
   const [videoRatio, setVideoRatio] = useState('9:16');
   const [videoResolution, setVideoResolution] = useState('720p');
   const [videoDuration, setVideoDuration] = useState(15);
   const [productAssets, setProductAssets] = useState<Asset[]>([]); // 产品图支持多张
-  const [avatarAsset, setAvatarAsset] = useState<Asset>({});
   const [plan, setPlan] = useState<MarketingPlan | null>(null);
   const [shots, setShots] = useState<ShotState[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
@@ -166,9 +163,7 @@ export default function MarketingStudioPage() {
   const [replica, setReplica] = useState<{ imgPrompt: string } | null>(null); // 非空=复刻模式(视频提示词已填入文本框可编辑),存出图专用构图 prompt
   const [expanding, setExpanding] = useState(false); // AI 扩写提示词中
   const productInput = useRef<HTMLInputElement>(null);
-  const avatarInput = useRef<HTMLInputElement>(null);
 
-  const fmt = useMemo(() => AD_FORMATS.find((f) => f.id === formatId) || AD_FORMATS[0], [formatId]);
   const visibleFormats = useMemo(() => (category === 'all' ? AD_FORMATS : AD_FORMATS.filter((f) => f.category === category)), [category]);
   // 视频步骤动态计费(按当前选的分辨率/时长实时算);首帧图仍走固定 COST.image。
   const videoCost = videoCredits(REPLICA_VIDEO_MODEL, videoResolution, videoDuration);
@@ -221,12 +216,10 @@ export default function MarketingStudioPage() {
       if (typeof s.formatId === 'string' && s.formatId) setFormatId(s.formatId);
       if (typeof s.hookId === 'string' && s.hookId) setHookId(s.hookId);
       if (typeof s.settingId === 'string' && s.settingId) setSettingId(s.settingId);
-      if (typeof s.avatarId === 'string' && s.avatarId) setAvatarId(s.avatarId);
       if (s.replica && typeof s.replica.imgPrompt === 'string') setReplica(s.replica);
       // 图只存了 url(R2/同源,可恢复);blob preview 重载即失效,用 url 兜底
       const purls: string[] = Array.isArray(s.productUrls) ? s.productUrls.filter(Boolean) : (s.productUrl ? [s.productUrl] : []);
       if (purls.length) setProductAssets(purls.map((u: string) => ({ preview: u, url: u })));
-      if (s.avatarUrl) setAvatarAsset({ preview: s.avatarUrl, url: s.avatarUrl });
       if (VIDEO_RESOLUTIONS.includes(s.videoResolution)) setVideoResolution(s.videoResolution);
       if (VIDEO_DURATIONS.includes(s.videoDuration)) setVideoDuration(s.videoDuration);
       if (VIDEO_RATIOS.includes(s.videoRatio)) setVideoRatio(s.videoRatio);
@@ -253,15 +246,15 @@ export default function MarketingStudioPage() {
     if (!mounted) return; // 不再要求有 plan:只填了输入(还没生成)也存,登录 OAuth 跳转回来才不丢
     try {
       localStorage.setItem(MK_SESSION_KEY, JSON.stringify({
-        plan, shots, product, formatId, hookId, settingId, avatarId, replica,
+        plan, shots, product, formatId, hookId, settingId, replica,
         videoRatio, videoResolution, videoDuration, creationId,
-        productUrls: productAssets.map((a) => a.url).filter((u): u is string => !!u && !u.startsWith('data:')), avatarUrl: avatarAsset.url?.startsWith('data:') ? '' : avatarAsset.url || '',
+        productUrls: productAssets.map((a) => a.url).filter((u): u is string => !!u && !u.startsWith('data:')),
         ts: Date.now(),
       }));
     } catch { /* storage full etc. */ }
-  }, [mounted, plan, shots, product, formatId, hookId, settingId, avatarId, replica, videoRatio, videoResolution, videoDuration, creationId, productAssets, avatarAsset.url]);
+  }, [mounted, plan, shots, product, formatId, hookId, settingId, replica, videoRatio, videoResolution, videoDuration, creationId, productAssets]);
 
-  async function onPick(kind: 'product' | 'avatar', file?: File | null) {
+  async function onPick(file?: File | null) {
     if (!file) return;
     if (!file.type.startsWith('image/')) { setErr('not_image'); return; }
     setErr(null);
@@ -269,10 +262,6 @@ export default function MarketingStudioPage() {
     try { dataUrl = await imageToDataUrl(file); }
     catch (e) { setErr(e instanceof Error ? e.message : 'upload_failed'); return; }
     if (dataUrl.length > 8_000_000) { setErr('image_too_large'); return; }
-    if (kind === 'avatar') {
-      setAvatarAsset({ preview: dataUrl, url: dataUrl, uploading: false });
-      return;
-    }
     setProductAssets((prev) => [...prev, { preview: dataUrl, url: dataUrl, uploading: false }]);
   }
 
@@ -282,7 +271,7 @@ export default function MarketingStudioPage() {
       const file = Array.from(event.clipboardData?.files || []).find((item) => item.type.startsWith('image/'));
       if (!file) return;
       event.preventDefault();
-      void onPick('product', file);
+      void onPick(file);
     };
     window.addEventListener('paste', handlePaste);
     return () => window.removeEventListener('paste', handlePaste);
@@ -297,7 +286,6 @@ export default function MarketingStudioPage() {
     if (r) {
       setProduct(r.vidPrompt); // 完整视频提示词填入文本框:用户可见、可编辑、可微调台词/动作/场景
       setProductAssets(r.image ? [{ preview: r.image, url: r.image }] : []); // 带入产品图(可再加自己的多张)
-      setAvatarAsset(r.avatar ? { preview: r.avatar, url: r.avatar } : {}); // 带入人物图(UGC 口播类才有),无则清空
     }
     setPlan(null); setShots([]); setErr(null);
     setCompose({ status: 'idle', frac: 0, note: '', url: '' });
@@ -311,7 +299,7 @@ export default function MarketingStudioPage() {
     if (!brief) { setErr(t('marketingStudio.errors.expandFirst')); return; }
     setExpanding(true); setErr(null);
     try {
-      const r = await postJson('/api/marketing-studio/expand-prompt', { brief, formatId, productUrls: productAssets.map((a) => a.url).filter(Boolean), avatarUrl: avatarAsset.url || '' });
+      const r = await postJson('/api/marketing-studio/expand-prompt', { brief, formatId, productUrls: productAssets.map((a) => a.url).filter(Boolean) });
       if (r.prompt) { setProduct(r.prompt); setReplica(null); } // 扩写结果=手动详细脚本(非复刻),出图也用它
     } catch (e) {
       setErr(String((e as Error).message || e));
@@ -323,7 +311,7 @@ export default function MarketingStudioPage() {
   async function genDirectVideo() {
     if (status !== 'authenticated') { signIn('google'); return; }
     if (!product.trim() && !productAssets.some((a) => a.url)) { setErr('product_required'); return; }
-    if (productAssets.some((a) => a.uploading) || avatarAsset.uploading) return;
+    if (productAssets.some((a) => a.uploading)) return;
     // 场景/钩子下拉 → 注入 prompt 占位(both 复刻/普通模式生效):场景进画面(出图+视频),钩子进视频开场
     const settingRecipe = getSetting(settingId).recipe; // 英文场景描述(空=智能自选)
     const hookEn = getHook(hookId).promptEn || ''; // 英文开场钩子指令
@@ -353,7 +341,7 @@ export default function MarketingStudioPage() {
         setCreationId(cid);
       } catch { /* 占位失败不阻断生成 */ }
 
-      const referenceImages = [avatarAsset.url, ...productAssets.map((a) => a.url)].filter((u): u is string => !!u);
+      const referenceImages = productAssets.map((a) => a.url).filter((u): u is string => !!u);
       const imgUrl = referenceImages[0] || '';
       local.img = 'done';
       local.imgUrl = imgUrl;
@@ -418,9 +406,8 @@ export default function MarketingStudioPage() {
   const formatDesc = (f: (typeof AD_FORMATS)[number]) => (locale === 'fr' ? t(`marketingStudio.formatDescs.${f.id}`) : locale === 'zh' ? (f.descZh ?? f.desc) : f.desc);
   const hookLabel = (h: (typeof AD_HOOKS)[number]) => (locale === 'fr' ? t(`marketingStudio.hookLabels.${h.id}`) : locale === 'zh' ? (h.zh ?? h.label) : h.label);
   const settingLabel = (s: (typeof AD_SETTINGS)[number]) => (locale === 'fr' ? t(`marketingStudio.settingLabels.${s.id}`) : locale === 'zh' ? (s.zh ?? s.label) : s.label);
-  const avatarLabel = (a: (typeof AVATAR_PRESETS)[number]) => (locale === 'fr' ? t(`marketingStudio.avatarLabels.${a.id}`) : locale === 'zh' ? (a.zh ?? a.label) : a.label);
 
-  // 单张已上传缩略图(带删除);产品图可多张,人物图单张
+  // 单张已上传缩略图(带删除);产品图可多张。
   const ThumbSlot = ({ asset, onRemove, label }: { asset: Asset; onRemove: () => void; label: string }) => (
     <div className="relative w-14 h-14 rounded-2xl overflow-hidden border border-white/15 shrink-0">
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -466,16 +453,11 @@ export default function MarketingStudioPage() {
           <div className="flex items-stretch gap-4">
             {/* prompt + 控件 */}
             <div className="flex-1 min-w-0 flex flex-col">
-              <input ref={productInput} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { Array.from(e.target.files || []).forEach((f) => void onPick('product', f)); e.target.value = ''; }} />
-              <input ref={avatarInput} type="file" accept="image/*" className="hidden" onChange={(e) => { void onPick('avatar', e.target.files?.[0]); e.target.value = ''; }} />
-              {/* 上传图:产品(可多张,一次可多选)+ 人物,横排放输入框上方 */}
+              <input ref={productInput} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { Array.from(e.target.files || []).forEach((f) => void onPick(f)); e.target.value = ''; }} />
+              {/* 上传图:产品(可多张,一次可多选),横排放输入框上方 */}
               <div className="flex flex-wrap items-center gap-1.5 mb-2.5">
                 {productAssets.map((a, i) => <ThumbSlot key={i} asset={a} onRemove={() => setProductAssets((prev) => prev.filter((_, j) => j !== i))} label={t('marketingStudio.product')} />)}
                 {productAssets.length < 4 && <AddSlot onClick={() => productInput.current?.click()} label={productAssets.length ? t('marketingStudio.addProduct') : t('marketingStudio.product')} />}
-                <span className="w-px h-12 bg-white/10 mx-1 shrink-0" />
-                {avatarAsset.preview
-                  ? <ThumbSlot asset={avatarAsset} onRemove={() => setAvatarAsset({})} label={t('marketingStudio.avatar')} />
-                  : <AddSlot onClick={() => avatarInput.current?.click()} label={t('marketingStudio.avatar')} />}
               </div>
               <textarea value={product} onChange={(e) => setProduct(e.target.value)} rows={4}
                 placeholder={t('marketingStudio.promptPlaceholder')}
@@ -490,7 +472,6 @@ export default function MarketingStudioPage() {
                 </select>
                 {!replica && <select value={hookId} onChange={(e) => setHookId(e.target.value)} className={selCls} style={selStyle} title={t('marketingStudio.hookTitle')}>{AD_HOOKS.map((h) => <option key={h.id} value={h.id}>{h.id === 'none' ? t('marketingStudio.hookOptional') : hookLabel(h)}</option>)}</select>}
                 {!replica && <select value={settingId} onChange={(e) => setSettingId(e.target.value)} className={selCls} style={selStyle} title={t('marketingStudio.settingTitle')}>{AD_SETTINGS.map((s) => <option key={s.id} value={s.id}>{s.id === 'none' ? t('marketingStudio.settingOptional') : settingLabel(s)}</option>)}</select>}
-                <select value={avatarId} onChange={(e) => { const id = e.target.value; setAvatarId(id); const a = getAvatar(id); setAvatarAsset(a.image ? { preview: a.image, url: a.image } : {}); }} disabled={!fmt.needsPerson} className={`${selCls} disabled:opacity-40`} style={selStyle} title={t('marketingStudio.avatarTitle')}>{AVATAR_PRESETS.map((a) => <option key={a.id} value={a.id}>{a.id === 'none' ? t('marketingStudio.avatarOptional') : avatarLabel(a)}</option>)}</select>
                 <select value={videoRatio} onChange={(e) => setVideoRatio(e.target.value)} className={selCls} style={selStyle} title={t('marketingStudio.aspectRatio')}>{VIDEO_RATIOS.map((r) => <option key={r} value={r}>{r}</option>)}</select>
                 <select value={videoResolution} onChange={(e) => setVideoResolution(e.target.value)} className={selCls} style={selStyle} title={t('marketingStudio.resolution')}>{VIDEO_RESOLUTIONS.map((r) => <option key={r} value={r}>{r}</option>)}</select>
                 <select value={videoDuration} onChange={(e) => setVideoDuration(Number(e.target.value))} className={selCls} style={selStyle} title={t('marketingStudio.duration')}>{VIDEO_DURATIONS.map((d) => <option key={d} value={d}>{d}s</option>)}</select>
@@ -498,7 +479,7 @@ export default function MarketingStudioPage() {
               </div>
             </div>
             {/* GENERATE(通高) */}
-            <button onClick={genDirectVideo} disabled={busy !== null || productAssets.some((a) => a.uploading) || avatarAsset.uploading || !hasCreditsForVideo}
+            <button onClick={genDirectVideo} disabled={busy !== null || productAssets.some((a) => a.uploading) || !hasCreditsForVideo}
               className="self-stretch px-6 rounded-2xl font-extrabold text-sm flex flex-col items-center justify-center gap-1.5 disabled:opacity-50 transition hover:brightness-105 shrink-0"
               style={{ background: `radial-gradient(90% 90% at 50% 120%, #a78bfa 0%, rgba(167,139,250,0) 60%), ${LIME}`, color: '#fff' }}>
               {busy === 'video' ? <Loader2 className="w-5 h-5 animate-spin" /> : <Video className="w-5 h-5" />}
