@@ -42,7 +42,7 @@ export function Navbar() {
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-gradient text-white shadow-glow">
             <Sparkles className="h-4 w-4" />
           </span>
-          <span className="hidden text-[15px] tracking-tight sm:inline">Marketing Studio</span>
+          <span className="hidden text-[15px] tracking-tight sm:inline">InstaTak</span>
         </Link>
         <nav className="flex items-center gap-1">
           <Link href="/pricing" className={navLink}>

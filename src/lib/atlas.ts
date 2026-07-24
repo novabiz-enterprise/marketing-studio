@@ -39,7 +39,7 @@ function openRouterHeaders(json = true): Record<string, string> {
   const headers: Record<string, string> = {
     Authorization: `Bearer ${openRouterApiKey()}`,
     'User-Agent': UA,
-    'X-OpenRouter-Title': 'Atlas Marketing Studio',
+    'X-OpenRouter-Title': 'InstaTak',
   };
   if (json) headers['Content-Type'] = 'application/json';
   const referer = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXTAUTH_URL || process.env.APP_URL;

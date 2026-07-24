@@ -74,19 +74,18 @@ function pollGen(getUrl: string): Promise<string> {
     }, 3000);
   });
 }
-function errText(code: string, locale: string) {
-  const zh = locale === 'zh';
+function errText(code: string, t: (key: string, vars?: Record<string, string | number>) => string) {
   if (code.startsWith('insufficient_credits:')) {
     const [, need, have] = code.split(':');
-    return zh ? `积分不足:本次需要 ${need} 积分,当前只有 ${have}。` : `Not enough credits: this step needs ${need}, you have ${have}.`;
+    return t('marketingStudio.errors.notEnough', { need, have });
   }
-  if (code === 'insufficient_credits') return zh ? '积分不足,请前往定价页充值。' : 'Not enough credits. Please top up on the pricing page.';
-  if (code === 'plan_fallback') return zh ? 'AI 出方案暂时不可用,已用模板方案,可直接生成或稍后重试。' : 'AI planning is temporarily unavailable; a template plan is used — you can generate now or retry later.';
-  if (code === 'product_required') return zh ? '请先填写产品描述或上传产品图片。' : 'Please add a product description or upload a product image first.';
-  if (code === 'image_too_large') return zh ? '图片太大了,请压缩到 8MB 以内。' : 'Image is too large. Please compress it to under 8MB.';
-  if (code === 'not_image') return zh ? '请上传图片文件。' : 'Please upload an image file';
-  if (code === 'video_failed' || code === 'empty_output' || code === 'generation failed' || code === 'failed') return zh ? '生成失败了,请点重试;若反复失败,可能是内容触发了审核或额度不足。' : 'Generation failed — please retry; if it persists it may be a content-safety block or low credits.';
-  return zh ? `出错了:${code}(可点重试)` : `Something went wrong: ${code} (try again)`;
+  if (code === 'insufficient_credits') return t('marketingStudio.errors.insufficientCredits');
+  if (code === 'plan_fallback') return t('marketingStudio.errors.planFallback');
+  if (code === 'product_required') return t('marketingStudio.errors.productRequired');
+  if (code === 'image_too_large') return t('marketingStudio.errors.imageTooLarge');
+  if (code === 'not_image') return t('marketingStudio.errors.notImage');
+  if (code === 'video_failed' || code === 'empty_output' || code === 'generation failed' || code === 'failed') return t('marketingStudio.errors.videoFailed');
+  return t('marketingStudio.errors.somethingWrong', { code });
 }
 
 // imgGetUrl/vidGetUrl = Atlas 任务查询地址:提交后立刻持久化,刷新/中断后凭它恢复轮询,不重复提交扣费。
@@ -141,7 +140,7 @@ function buildDirectVideoPrompt(plan: MarketingPlan, lang: string) {
 export default function MarketingStudioPage() {
   const { status } = useSession();
   const mounted = useMounted();
-  const { locale } = useI18n();
+  const { locale, t } = useI18n();
   const byokActive = useByokActive();
   const [category, setCategory] = useState<AdCategory | 'all'>('all');
   const [formatId, setFormatId] = useState('ugc');
@@ -321,7 +320,7 @@ export default function MarketingStudioPage() {
   // AI 扩写:把文本框里的简短描述扩写成完整 UGC 视频提示词(参考已上传的产品图/人物图,台词跟随输入语言)
   async function expandPrompt() {
     const brief = product.trim();
-    if (!brief) { setErr(locale === 'zh' ? '请先输入简短描述再扩写' : 'Enter a short brief first'); return; }
+    if (!brief) { setErr(t('marketingStudio.errors.expandFirst')); return; }
     setExpanding(true); setErr(null);
     try {
       const r = await postJson('/api/marketing-studio/expand-prompt', { brief, formatId, productUrls: productAssets.map((a) => a.url).filter(Boolean), avatarUrl: avatarAsset.url || '' });
@@ -349,7 +348,7 @@ export default function MarketingStudioPage() {
     setPlan(directPlan);
     setShots([local]);
     setCreationId('');
-    setCompose({ status: 'run', frac: 0.05, note: locale === 'zh' ? '准备生成' : 'Preparing', url: '' });
+    setCompose({ status: 'run', frac: 0.05, note: t('marketingStudio.preparing'), url: '' });
     let cid = '';
     try {
       const currentCredits = await refreshCredits();
@@ -366,7 +365,7 @@ export default function MarketingStudioPage() {
         setCreationId(cid);
       } catch { /* 占位失败不阻断生成 */ }
 
-      setCompose({ status: 'run', frac: 0.15, note: locale === 'zh' ? '生成首帧' : 'Generating first frame', url: '' });
+      setCompose({ status: 'run', frac: 0.15, note: t('marketingStudio.generatingFirstFrame'), url: '' });
       local.img = 'run';
       setShots([{ ...local }]);
       const im = await postJson('/api/marketing-studio/shot-image', {
@@ -383,7 +382,7 @@ export default function MarketingStudioPage() {
       local.imgUrl = imgUrl;
       setShots([{ ...local }]);
 
-      setCompose({ status: 'run', frac: 0.48, note: locale === 'zh' ? '生成视频' : 'Generating video', url: '' });
+      setCompose({ status: 'run', frac: 0.48, note: t('marketingStudio.generatingVideo'), url: '' });
       local.vid = 'run';
       setShots([{ ...local }]);
       const vd = await postJson('/api/marketing-studio/shot-video', {
@@ -419,7 +418,7 @@ export default function MarketingStudioPage() {
       local.img = local.img === 'run' ? 'fail' : local.img;
       local.vid = local.vid === 'run' ? 'fail' : local.vid;
       setShots([{ ...local }]);
-      setCompose((c) => (c.status === 'run' ? { ...c, status: 'fail', note: errText(e instanceof Error ? e.message : 'video_failed', locale) } : c));
+      setCompose((c) => (c.status === 'run' ? { ...c, status: 'fail', note: errText(e instanceof Error ? e.message : 'video_failed', t) } : c));
       // 作品页把这条占位标记为"失败"(而不是永远转圈)
       if (cid) fetch(`/api/creations/${cid}`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...byokHeaders() }, body: JSON.stringify({ status: 'failed', error: e instanceof Error ? e.message : 'video_failed' }) }).catch(() => {});
       setCreationId('');
@@ -436,6 +435,11 @@ export default function MarketingStudioPage() {
     backgroundSize: 'auto, 44px 44px, 44px 44px',
   } as React.CSSProperties;
   const selCls = 'dark-select appearance-none bg-white/[0.04] rounded-lg pl-2.5 pr-7 py-2 text-xs text-white/90 focus:outline-none focus:ring-1 focus:ring-[#7036F0]';
+  const formatLabel = (f: (typeof AD_FORMATS)[number]) => (locale === 'fr' ? t(`marketingStudio.formatLabels.${f.id}`) : locale === 'zh' ? (f.zh ?? f.label) : f.label);
+  const formatDesc = (f: (typeof AD_FORMATS)[number]) => (locale === 'fr' ? t(`marketingStudio.formatDescs.${f.id}`) : locale === 'zh' ? (f.descZh ?? f.desc) : f.desc);
+  const hookLabel = (h: (typeof AD_HOOKS)[number]) => (locale === 'fr' ? t(`marketingStudio.hookLabels.${h.id}`) : locale === 'zh' ? (h.zh ?? h.label) : h.label);
+  const settingLabel = (s: (typeof AD_SETTINGS)[number]) => (locale === 'fr' ? t(`marketingStudio.settingLabels.${s.id}`) : locale === 'zh' ? (s.zh ?? s.label) : s.label);
+  const avatarLabel = (a: (typeof AVATAR_PRESETS)[number]) => (locale === 'fr' ? t(`marketingStudio.avatarLabels.${a.id}`) : locale === 'zh' ? (a.zh ?? a.label) : a.label);
 
   // 单张已上传缩略图(带删除);产品图可多张,人物图单张
   const ThumbSlot = ({ asset, onRemove, label }: { asset: Asset; onRemove: () => void; label: string }) => (
@@ -443,7 +447,7 @@ export default function MarketingStudioPage() {
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={asset.preview} alt={label} className="w-full h-full object-cover" />
       {asset.uploading && <div className="absolute inset-0 bg-black/60 grid place-items-center"><Loader2 className="w-4 h-4 animate-spin text-white" /></div>}
-      {asset.url && <div className="absolute bottom-0 inset-x-0 text-[8px] text-center font-semibold leading-tight" style={{ background: LIME, color: '#fff' }}>{locale === 'zh' ? '已传' : 'OK'}</div>}
+      {asset.url && <div className="absolute bottom-0 inset-x-0 text-[8px] text-center font-semibold leading-tight" style={{ background: LIME, color: '#fff' }}>{t('marketingStudio.uploadedOk')}</div>}
       <button onClick={onRemove} className="absolute top-0.5 right-0.5 bg-black/60 rounded-full p-0.5"><X className="w-3 h-3 text-white" /></button>
     </div>
   );
@@ -463,19 +467,17 @@ export default function MarketingStudioPage() {
         <div className="mx-auto flex w-full max-w-6xl items-center gap-3">
           <a href="/" className="flex items-center gap-2 hover:opacity-80 transition">
             <div className="w-7 h-7 rounded-lg grid place-items-center text-sm" style={{ background: LIME }}>🎬</div>
-            <b className="text-sm tracking-tight">Marketing Studio</b>
+            <b className="text-sm tracking-tight">InstaTak</b>
           </a>
-          <a href="/" className="flex items-center gap-1 text-xs text-white/60 hover:text-white transition">← {locale === 'zh' ? '全部应用' : 'All apps'}</a>
+          <a href="/" className="flex items-center gap-1 text-xs text-white/60 hover:text-white transition">← {t('marketingStudio.allApps')}</a>
         </div>
       </div>
 
       {/* Hero */}
       <div className="text-center pt-14 pb-10 px-6">
-        <div className="text-[11px] uppercase tracking-[0.24em] text-white/50 font-medium mb-3" style={{ fontFamily: 'var(--font-grotesk), "Space Grotesk", sans-serif' }}>Marketing Studio</div>
+        <div className="text-[11px] uppercase tracking-[0.24em] text-white/50 font-medium mb-3" style={{ fontFamily: 'var(--font-grotesk), "Space Grotesk", sans-serif' }}>InstaTak</div>
         <h1 className="font-bold uppercase leading-[1.08] tracking-[-0.03em] text-[clamp(40px,5.4vw,58px)] text-white/90" style={{ fontFamily: 'var(--font-grotesk), "Space Grotesk", system-ui, sans-serif' }}>
-          {locale === 'zh'
-            ? <>把任何产品<br />变成视频广告</>
-            : <>Turn any product<br />into a video ad</>}
+          <>{t('marketingStudio.heroTitleTop')}<br />{t('marketingStudio.heroTitleBottom')}</>
         </h1>
       </div>
 
@@ -489,30 +491,30 @@ export default function MarketingStudioPage() {
               <input ref={avatarInput} type="file" accept="image/*" className="hidden" onChange={(e) => { void onPick('avatar', e.target.files?.[0]); e.target.value = ''; }} />
               {/* 上传图:产品(可多张,一次可多选)+ 人物,横排放输入框上方 */}
               <div className="flex flex-wrap items-center gap-1.5 mb-2.5">
-                {productAssets.map((a, i) => <ThumbSlot key={i} asset={a} onRemove={() => setProductAssets((prev) => prev.filter((_, j) => j !== i))} label={locale === 'zh' ? '产品' : 'Product'} />)}
-                {productAssets.length < 4 && <AddSlot onClick={() => productInput.current?.click()} label={productAssets.length ? (locale === 'zh' ? '加产品' : 'Add') : (locale === 'zh' ? '产品' : 'Product')} />}
+                {productAssets.map((a, i) => <ThumbSlot key={i} asset={a} onRemove={() => setProductAssets((prev) => prev.filter((_, j) => j !== i))} label={t('marketingStudio.product')} />)}
+                {productAssets.length < 4 && <AddSlot onClick={() => productInput.current?.click()} label={productAssets.length ? t('marketingStudio.addProduct') : t('marketingStudio.product')} />}
                 <span className="w-px h-12 bg-white/10 mx-1 shrink-0" />
                 {avatarAsset.preview
-                  ? <ThumbSlot asset={avatarAsset} onRemove={() => setAvatarAsset({})} label={locale === 'zh' ? '人物' : 'Avatar'} />
-                  : <AddSlot onClick={() => avatarInput.current?.click()} label={locale === 'zh' ? '人物' : 'Avatar'} />}
+                  ? <ThumbSlot asset={avatarAsset} onRemove={() => setAvatarAsset({})} label={t('marketingStudio.avatar')} />
+                  : <AddSlot onClick={() => avatarInput.current?.click()} label={t('marketingStudio.avatar')} />}
               </div>
               <textarea value={product} onChange={(e) => setProduct(e.target.value)} rows={4}
-                placeholder={locale === 'zh' ? '一句话描述产品/广告,点「AI 扩写」生成完整口播脚本;也可直接粘贴或编辑完整提示词…' : 'One line about your product/ad, then hit AI Expand; or paste & edit a full prompt…'}
+                placeholder={t('marketingStudio.promptPlaceholder')}
                 className="w-full flex-1 bg-transparent text-[15px] leading-relaxed resize-none focus:outline-none placeholder:text-white/30 px-1 pt-1" />
               <div className="flex items-center gap-2 mt-1 mb-1">
-                <button onClick={expandPrompt} disabled={expanding || !product.trim()} className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg text-[#131517] disabled:opacity-40 transition hover:brightness-110" style={{ background: LIME }}>{expanding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}{locale === 'zh' ? 'AI 扩写完美提示词' : 'AI Expand'}</button>
-                {replica && <span className="text-[11px] text-white/45">{locale === 'zh' ? '✨ 已载入复刻脚本,可直接编辑台词/动作' : '✨ Replica script loaded — edit freely'}</span>}
+                <button onClick={expandPrompt} disabled={expanding || !product.trim()} className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg text-[#131517] disabled:opacity-40 transition hover:brightness-110" style={{ background: LIME }}>{expanding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}{t('marketingStudio.aiExpand')}</button>
+                {replica && <span className="text-[11px] text-white/45">✨ {t('marketingStudio.replicaLoaded')}</span>}
               </div>
               <div className="flex items-center gap-2 flex-wrap mt-2">
-                <select value={formatId} onChange={(e) => setFormatId(e.target.value)} className={selCls} style={selStyle} title={locale === 'zh' ? '玩法' : 'Format'}>
-                  {AD_FORMATS.map((f) => <option key={f.id} value={f.id}>{f.emoji} {locale === 'zh' ? (f.zh ?? f.label) : f.label}</option>)}
+                <select value={formatId} onChange={(e) => setFormatId(e.target.value)} className={selCls} style={selStyle} title={t('marketingStudio.formatTitle')}>
+                  {AD_FORMATS.map((f) => <option key={f.id} value={f.id}>{f.emoji} {formatLabel(f)}</option>)}
                 </select>
-                {!replica && <select value={hookId} onChange={(e) => setHookId(e.target.value)} className={selCls} style={selStyle} title={locale === 'zh' ? '开场钩子' : 'Hook'}>{AD_HOOKS.map((h) => <option key={h.id} value={h.id}>{h.id === 'none' ? (locale === 'zh' ? '钩子(可选)' : 'Hook (optional)') : (locale === 'zh' ? (h.zh ?? h.label) : h.label)}</option>)}</select>}
-                {!replica && <select value={settingId} onChange={(e) => setSettingId(e.target.value)} className={selCls} style={selStyle} title={locale === 'zh' ? '场景' : 'Setting'}>{AD_SETTINGS.map((s) => <option key={s.id} value={s.id}>{s.id === 'none' ? (locale === 'zh' ? '场景(可选)' : 'Setting (optional)') : (locale === 'zh' ? (s.zh ?? s.label) : s.label)}</option>)}</select>}
-                <select value={avatarId} onChange={(e) => { const id = e.target.value; setAvatarId(id); const a = getAvatar(id); setAvatarAsset(a.image ? { preview: a.image, url: a.image } : {}); }} disabled={!fmt.needsPerson} className={`${selCls} disabled:opacity-40`} style={selStyle} title={locale === 'zh' ? '出镜人物(选了自动填充形象图)' : 'Avatar (auto-fills a portrait)'}>{AVATAR_PRESETS.map((a) => <option key={a.id} value={a.id}>{a.id === 'none' ? (locale === 'zh' ? '人物(可选)' : 'Avatar (optional)') : (locale === 'zh' ? (a.zh ?? a.label) : a.label)}</option>)}</select>
-                <select value={videoRatio} onChange={(e) => setVideoRatio(e.target.value)} className={selCls} style={selStyle} title={locale === 'zh' ? '画面比例' : 'Aspect ratio'}>{VIDEO_RATIOS.map((r) => <option key={r} value={r}>{r}</option>)}</select>
-                <select value={videoResolution} onChange={(e) => setVideoResolution(e.target.value)} className={selCls} style={selStyle} title={locale === 'zh' ? '分辨率' : 'Resolution'}>{VIDEO_RESOLUTIONS.map((r) => <option key={r} value={r}>{r}</option>)}</select>
-                <select value={videoDuration} onChange={(e) => setVideoDuration(Number(e.target.value))} className={selCls} style={selStyle} title={locale === 'zh' ? '时长' : 'Duration'}>{VIDEO_DURATIONS.map((d) => <option key={d} value={d}>{d}s</option>)}</select>
+                {!replica && <select value={hookId} onChange={(e) => setHookId(e.target.value)} className={selCls} style={selStyle} title={t('marketingStudio.hookTitle')}>{AD_HOOKS.map((h) => <option key={h.id} value={h.id}>{h.id === 'none' ? t('marketingStudio.hookOptional') : hookLabel(h)}</option>)}</select>}
+                {!replica && <select value={settingId} onChange={(e) => setSettingId(e.target.value)} className={selCls} style={selStyle} title={t('marketingStudio.settingTitle')}>{AD_SETTINGS.map((s) => <option key={s.id} value={s.id}>{s.id === 'none' ? t('marketingStudio.settingOptional') : settingLabel(s)}</option>)}</select>}
+                <select value={avatarId} onChange={(e) => { const id = e.target.value; setAvatarId(id); const a = getAvatar(id); setAvatarAsset(a.image ? { preview: a.image, url: a.image } : {}); }} disabled={!fmt.needsPerson} className={`${selCls} disabled:opacity-40`} style={selStyle} title={t('marketingStudio.avatarTitle')}>{AVATAR_PRESETS.map((a) => <option key={a.id} value={a.id}>{a.id === 'none' ? t('marketingStudio.avatarOptional') : avatarLabel(a)}</option>)}</select>
+                <select value={videoRatio} onChange={(e) => setVideoRatio(e.target.value)} className={selCls} style={selStyle} title={t('marketingStudio.aspectRatio')}>{VIDEO_RATIOS.map((r) => <option key={r} value={r}>{r}</option>)}</select>
+                <select value={videoResolution} onChange={(e) => setVideoResolution(e.target.value)} className={selCls} style={selStyle} title={t('marketingStudio.resolution')}>{VIDEO_RESOLUTIONS.map((r) => <option key={r} value={r}>{r}</option>)}</select>
+                <select value={videoDuration} onChange={(e) => setVideoDuration(Number(e.target.value))} className={selCls} style={selStyle} title={t('marketingStudio.duration')}>{VIDEO_DURATIONS.map((d) => <option key={d} value={d}>{d}s</option>)}</select>
                 {/* 语言下拉已移除:台词语言自动跟随文本框里输入的语言(中文输入→中文台词) */}
               </div>
             </div>
@@ -521,22 +523,20 @@ export default function MarketingStudioPage() {
               className="self-stretch px-6 rounded-2xl font-extrabold text-sm flex flex-col items-center justify-center gap-1.5 disabled:opacity-50 transition hover:brightness-105 shrink-0"
               style={{ background: `radial-gradient(90% 90% at 50% 120%, #a78bfa 0%, rgba(167,139,250,0) 60%), ${LIME}`, color: '#fff' }}>
               {busy === 'video' ? <Loader2 className="w-5 h-5 animate-spin" /> : <Video className="w-5 h-5" />}
-              <span>{byokActive ? (locale === 'zh' ? '生成视频' : 'GENERATE') : (!hasCreditsForVideo ? (locale === 'zh' ? '积分不足' : 'LOW CREDITS') : (locale === 'zh' ? '生成视频' : 'GENERATE'))}</span>{!byokActive && <span className="text-[10px] opacity-70">✦ {shotCost}</span>}
+              <span>{byokActive ? t('marketingStudio.generate') : (!hasCreditsForVideo ? t('marketingStudio.lowCredits') : t('marketingStudio.generate'))}</span>{!byokActive && <span className="text-[10px] opacity-70">✦ {shotCost}</span>}
             </button>
           </div>
           {(status === 'authenticated' || byokActive) && (
             <div className="mt-3 text-center text-[11px] text-white/35">
               {byokActive
-                ? (locale === 'zh' ? '用自己的 Key · 不扣积分' : 'Your own key · no credits charged')
-                : (locale === 'zh'
-                  ? `直接生成预计 ${shotCost} 积分(首帧 ${COSTS.image},视频 ${videoCost}),当前余额 ${credits ?? '·'}。`
-                  : `Direct generation estimate ${shotCost} credits (first frame ${COSTS.image}, video ${videoCost}), current balance ${credits ?? '·'}.`)}
+                ? t('common.yourKeyNoCredits')
+                : t('marketingStudio.directEstimate', { total: shotCost, image: COSTS.image, video: videoCost, credits: credits ?? '·' })}
             </div>
           )}
         </div>
       </div>
 
-      {err && <div className="max-w-4xl mx-auto px-4 mt-4 mb-6"><div className="flex items-center gap-2 text-sm text-red-400 bg-red-500/10 border border-red-500/25 rounded-lg px-3 py-2"><AlertCircle className="w-4 h-4" />{errText(err, locale)}</div></div>}
+      {err && <div className="max-w-4xl mx-auto px-4 mt-4 mb-6"><div className="flex items-center gap-2 text-sm text-red-400 bg-red-500/10 border border-red-500/25 rounded-lg px-3 py-2"><AlertCircle className="w-4 h-4" />{errText(err, t)}</div></div>}
 
       {/* 成片 */}
       {compose.status !== 'idle' && (
@@ -544,21 +544,21 @@ export default function MarketingStudioPage() {
           <div className="rounded-3xl border border-white/10 p-5 shadow-[0_24px_80px_-28px_rgba(112,54,240,0.55)]" style={{ background: PANEL }}>
             <div className="flex items-center gap-2 text-sm mb-3">
               {compose.status === 'done' ? <CheckCircle2 className="w-4 h-4" style={{ color: LIME }} /> : compose.status === 'fail' ? <AlertCircle className="w-4 h-4 text-red-400" /> : <Loader2 className="w-4 h-4 animate-spin" style={{ color: LIME }} />}
-              <b>{compose.status === 'done' ? (locale === 'zh' ? '视频已就绪' : 'Video ready') : compose.status === 'fail' ? (locale === 'zh' ? '生成失败' : 'Generation failed') : (locale === 'zh' ? '生成中' : 'Generating')}</b>
+              <b>{compose.status === 'done' ? t('marketingStudio.videoReady') : compose.status === 'fail' ? t('marketingStudio.generationFailed') : t('common.generating')}</b>
               <span className="ml-auto text-xs text-white/40 truncate max-w-[45%]">{compose.note}</span>
             </div>
             {compose.status === 'run' && (
               <>
                 <div className="h-1.5 bg-white/10 rounded-full overflow-hidden mb-4"><div className="h-full rounded-full transition-all" style={{ width: `${Math.round(compose.frac * 100)}%`, background: `linear-gradient(90deg,#a78bfa,${LIME})` }} /></div>
                 <div className="relative mx-auto aspect-[9/16] w-full max-w-[300px] rounded-2xl overflow-hidden border border-white/10 bg-black/40 grid place-items-center">
-                  <div className="flex flex-col items-center gap-2 text-white/50"><Loader2 className="w-9 h-9 animate-spin" style={{ color: LIME }} /><span className="text-xs">{compose.note || (locale === 'zh' ? '生成中…' : 'Generating…')}</span></div>
+                  <div className="flex flex-col items-center gap-2 text-white/50"><Loader2 className="w-9 h-9 animate-spin" style={{ color: LIME }} /><span className="text-xs">{compose.note || t('common.generating')}</span></div>
                 </div>
               </>
             )}
             {compose.status === 'fail' && (
               <div className="rounded-2xl border border-red-500/25 bg-red-500/10 p-4 text-sm text-red-300 text-center">
-                <div className="mb-3 leading-relaxed">{compose.note || (locale === 'zh' ? '生成失败,请重试' : 'Generation failed, please retry')}</div>
-                <button onClick={genDirectVideo} disabled={busy !== null} className="inline-flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl transition hover:brightness-110 disabled:opacity-50" style={{ background: LIME, color: '#131517' }}>{busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Video className="w-4 h-4" />}{locale === 'zh' ? '重试' : 'Retry'}</button>
+                <div className="mb-3 leading-relaxed">{compose.note || t('marketingStudio.generationFailed')}</div>
+                <button onClick={genDirectVideo} disabled={busy !== null} className="inline-flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl transition hover:brightness-110 disabled:opacity-50" style={{ background: LIME, color: '#131517' }}>{busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Video className="w-4 h-4" />}{t('common.retry')}</button>
               </div>
             )}
             {compose.url && (
@@ -566,10 +566,10 @@ export default function MarketingStudioPage() {
                 <div className="relative mx-auto w-full max-w-[300px]">
                   <video controls autoPlay loop playsInline src={compose.url} className="w-full aspect-[9/16] rounded-2xl border border-white/10 bg-black object-contain shadow-[0_16px_50px_-20px_rgba(0,0,0,0.8)]" />
                 </div>
-                <p className="mt-2 text-[11px] text-white/35">{locale === 'zh' ? '点视频右下角开声音听口播 🔊' : 'Tap the video volume to hear the voiceover 🔊'}</p>
+                <p className="mt-2 text-[11px] text-white/35">{t('marketingStudio.videoHint')}</p>
                 <div className="mt-2 flex items-center gap-2">
-                  <a href={compose.url} download="ad.mp4" className="inline-flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl text-white transition hover:brightness-110" style={{ background: LIME }}><Download className="w-4 h-4" />{locale === 'zh' ? '下载视频' : 'Download'}</a>
-                  <button onClick={genDirectVideo} disabled={busy !== null} className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-xl border border-white/15 hover:border-[#7036F0] disabled:opacity-50 transition">{busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Video className="w-4 h-4" />}{locale === 'zh' ? '再生成一个' : 'Regenerate'}</button>
+                  <a href={compose.url} download="ad.mp4" className="inline-flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl text-white transition hover:brightness-110" style={{ background: LIME }}><Download className="w-4 h-4" />{t('common.downloadVideo')}</a>
+                  <button onClick={genDirectVideo} disabled={busy !== null} className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-xl border border-white/15 hover:border-[#7036F0] disabled:opacity-50 transition">{busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Video className="w-4 h-4" />}{t('marketingStudio.regenerate')}</button>
                 </div>
               </div>
             )}
@@ -584,7 +584,7 @@ export default function MarketingStudioPage() {
             <button key={c.id} onClick={() => setCategory(c.id)}
               className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-medium transition ${on ? 'bg-white text-[#131517]' : 'bg-white/5 text-white hover:bg-white/10'}`}>
               {CAT_ICON[c.id] && <span className="text-[13px] leading-none">{CAT_ICON[c.id]}</span>}
-              {locale === 'zh' ? ({ all: '全部', ugc: 'UGC', commercial: '商业广告', tiktok: 'TikTok' }[c.id] || CAT_LABEL[c.id] || c.label) : (CAT_LABEL[c.id] || c.label)}
+              {t(`marketingStudio.categories.${c.id}`)}
               {c.id === 'tiktok' && <span className="ml-0.5 rounded px-1 py-0.5 text-[8px] font-bold leading-none" style={{ background: LIME, color: '#fff' }}>NEW</span>}
             </button>
           );
@@ -602,20 +602,20 @@ export default function MarketingStudioPage() {
               ) : (
                 <div className="absolute inset-0 grid place-items-center text-6xl opacity-80 transition group-hover:scale-110">{f.emoji}</div>
               )}
-              {formatId === f.id && <div className="absolute top-2 left-2 text-[9px] font-semibold uppercase tracking-wide rounded-full px-2 py-0.5 z-10" style={{ background: LIME, color: '#fff' }}>{locale === 'zh' ? '已选' : 'Selected'}</div>}
+              {formatId === f.id && <div className="absolute top-2 left-2 text-[9px] font-semibold uppercase tracking-wide rounded-full px-2 py-0.5 z-10" style={{ background: LIME, color: '#fff' }}>{t('marketingStudio.selected')}</div>}
               <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/90 via-black/50 to-transparent">
-                <div className="text-[13px] font-bold tracking-tight">{locale === 'zh' ? (f.zh ?? f.label) : f.label}</div>
-                <div className="text-[10px] text-white/55 leading-tight mt-0.5 line-clamp-2">{locale === 'zh' ? (f.descZh ?? f.desc) : f.desc}</div>
+                <div className="text-[13px] font-bold tracking-tight">{formatLabel(f)}</div>
+                <div className="text-[10px] text-white/55 leading-tight mt-0.5 line-clamp-2">{formatDesc(f)}</div>
                 {EXAMPLE_RECIPES[f.id] && (
                   <button onClick={(e) => { e.stopPropagation(); replicateExample(f.id); }}
                     className="mt-2 w-full inline-flex items-center justify-center gap-1 rounded-lg py-1.5 text-[11px] font-bold transition hover:brightness-110" style={{ background: LIME, color: '#fff' }}>
-                    <Sparkles className="w-3 h-3" /> {locale === 'zh' ? '一键复刻' : 'Remix this'}
+                    <Sparkles className="w-3 h-3" /> {t('marketingStudio.remixThis')}
                   </button>
                 )}
               </div>
               {EXAMPLE_VIDEOS[f.id] && (
                 <button onClick={(e) => { e.stopPropagation(); setPreview(f.id); }}
-                  className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-black/50 backdrop-blur-sm grid place-items-center opacity-0 group-hover:opacity-100 transition hover:bg-black/75" title={locale === 'zh' ? '放大预览(带声音)' : 'Expand preview (with sound)'}>
+                  className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-black/50 backdrop-blur-sm grid place-items-center opacity-0 group-hover:opacity-100 transition hover:bg-black/75" title={t('marketingStudio.expandPreview')}>
                   <Play className="w-5 h-5 text-white" />
                 </button>
               )}
@@ -630,7 +630,7 @@ export default function MarketingStudioPage() {
             <video src={EXAMPLE_VIDEOS[preview]} controls autoPlay loop playsInline
               className="max-h-[85vh] w-auto rounded-2xl border border-white/10 bg-black" style={{ aspectRatio: '9 / 16' }} />
             <button onClick={() => setPreview(null)} className="absolute -top-3 -right-3 w-9 h-9 rounded-full bg-white text-black grid place-items-center shadow-lg"><X className="w-5 h-5" /></button>
-            <div className="mt-3 text-center text-sm text-white/80">{(() => { const pf = AD_FORMATS.find((f) => f.id === preview); return pf ? (locale === 'zh' ? (pf.zh ?? pf.label) : pf.label) : ''; })()} · {locale === 'zh' ? '点击空白处关闭' : 'Click outside to close'}</div>
+            <div className="mt-3 text-center text-sm text-white/80">{(() => { const pf = AD_FORMATS.find((f) => f.id === preview); return pf ? formatLabel(pf) : ''; })()} · {t('marketingStudio.closePreview')}</div>
           </div>
         </div>
       )}

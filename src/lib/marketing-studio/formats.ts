@@ -1,5 +1,5 @@
 /**
- * Marketing Studio — 广告 format 配方(format = 数据,不是代码分支)。
+ * InstaTak — 广告 format 配方(format = 数据,不是代码分支)。
  * 复刻 Higgsfield Product Ad Generator 的完整玩法库。新增玩法 = 加一行,零改代码。
  * 玩法枚举实地抓自 higgsfield.ai/marketing-studio/product。
  */

@@ -14,11 +14,10 @@ export default function PricingClient({
   mode: 'checkout' | 'redeem';
 }) {
   const { data: session } = useSession();
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const [busy, setBusy] = useState<string | null>(null);
   const [code, setCode] = useState('');
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
-  const zh = locale === 'zh';
 
   async function buy(packId: string) {
     if (!session) return signIn('google');
@@ -37,13 +36,11 @@ export default function PricingClient({
       }
       console.error('[pricing] checkout failed:', j);
       setMsg({
-        text: zh
-          ? `发起支付失败:${j.error || 'checkout_failed'}${j.detail ? ' — ' + String(j.detail).slice(0, 200) : ''}`
-          : `Checkout failed: ${j.error || 'unknown'}${j.detail ? ' — ' + String(j.detail).slice(0, 200) : ''}`,
+        text: `${t('pricing.checkoutFailed')}: ${j.error || 'unknown'}${j.detail ? ' — ' + String(j.detail).slice(0, 200) : ''}`,
         ok: false,
       });
     } catch (e) {
-      setMsg({ text: (zh ? '网络错误:' : 'Network error: ') + String(e), ok: false });
+      setMsg({ text: `${t('pricing.networkError')}: ${String(e)}`, ok: false });
     } finally {
       setBusy(null);
     }
@@ -65,10 +62,10 @@ export default function PricingClient({
         setCode('');
         window.dispatchEvent(new Event('atlas:credits'));
       } else {
-        setMsg({ text: `${zh ? '兑换失败' : 'Error'}: ${j.error || 'invalid code'}`, ok: false });
+        setMsg({ text: `${t('pricing.redeemFailed')}: ${j.error || 'invalid code'}`, ok: false });
       }
     } catch (e) {
-      setMsg({ text: (zh ? '网络错误:' : 'Network error: ') + String(e), ok: false });
+      setMsg({ text: `${t('pricing.networkError')}: ${String(e)}`, ok: false });
     } finally {
       setBusy(null);
     }
@@ -81,9 +78,9 @@ export default function PricingClient({
         <div className="flex items-center gap-4">
           <a href="/" className="flex items-center gap-2 hover:opacity-80 transition">
             <div className="w-7 h-7 rounded-lg grid place-items-center text-sm font-bold" style={{ background: '#7036F0', color: '#fff' }}>✦</div>
-            <b className="text-sm tracking-tight">Marketing Studio</b>
+            <b className="text-sm tracking-tight">InstaTak</b>
           </a>
-          <a href="/" className="text-xs text-white/60 hover:text-white transition">{zh ? '← 全部应用' : '← All apps'}</a>
+          <a href="/" className="text-xs text-white/60 hover:text-white transition">← {t('common.allApps')}</a>
         </div>
       </div>
 

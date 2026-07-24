@@ -1,8 +1,8 @@
 {
-  "name": "atlas-marketing-studio",
+  "name": "instatak",
   "version": "0.1.0",
   "private": true,
-  "description": "Atlas Marketing Studio is an open-source AI e-commerce ad studio for generating UGC product ads, reference-ad remakes, AI drama ads, and ad skits with Atlas Cloud multi-model workflows.",
+  "description": "InstaTak is an AI e-commerce ad studio for generating UGC product ads, reference-ad remakes, AI drama ads, and ad skits with multi-model workflows.",
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",

@@ -1,4 +1,4 @@
-import { withAtlas } from '@/lib/request-context';
+import { runWithProviderKeys, withAtlas } from '@/lib/request-context';
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
@@ -17,7 +17,7 @@ async function __byokPOST(req: Request) {
   if (dataUrl.length > 8_000_000) return NextResponse.json({ error: 'image_too_large' }, { status: 400 });
 
   try {
-    const url = await uploadMedia(dataUrl, 'mk-asset');
+    const url = await runWithProviderKeys({}, () => uploadMedia(dataUrl, 'mk-asset'));
     if (!/^https?:\/\//.test(url)) throw new Error('upload returned no url');
     return NextResponse.json({ url });
   } catch (e) {

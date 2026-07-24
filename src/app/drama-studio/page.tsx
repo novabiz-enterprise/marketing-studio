@@ -52,15 +52,15 @@ const selStyle: React.CSSProperties = { backgroundImage: CHEVRON, backgroundPosi
 const DRAMA_COSTS = { script: 5, image: 8, video: 12 };
 // 逐镜出片模型:Grok Imagine Video(产品图+角色定妆图+场景图 → 直接出片),与后端一致。
 const DRAMA_VIDEO_MODEL = 'x-ai/grok-imagine-video';
-function dramaErrText(code: string, locale: string) {
+function dramaErrText(code: string, t: (key: string, vars?: Record<string, string | number>) => string) {
   if (code.startsWith('insufficient_credits:')) {
     const [, need, have] = code.split(':');
-    return locale === 'zh' ? `积分不足:本次需要 ${need} 积分,当前只有 ${have}。` : `Not enough credits: this step needs ${need}, you have ${have}.`;
+    return t('dramaStudio.errors.notEnough', { need, have });
   }
-  if (code === 'insufficient_credits') return locale === 'zh' ? '积分不足,请前往定价页充值。' : 'Not enough credits. Please top up on the pricing page.';
-  if (code.includes('Atlas chat timed out')) return locale === 'zh' ? 'AI 剧本服务响应超时,请稍后重试。' : 'The AI script service timed out. Please try again later.';
-  if (code.startsWith('script_timeout_refunded')) return locale === 'zh' ? 'AI 剧本生成超时,已退回剧本积分。请稍后重试。' : 'AI script generation timed out. Script credits were refunded. Please try again later.';
-  if (code.startsWith('script_failed_refunded')) return locale === 'zh' ? 'AI 剧本生成失败,已退回剧本积分。请稍后重试。' : 'AI script generation failed. Script credits were refunded. Please try again later.';
+  if (code === 'insufficient_credits') return t('dramaStudio.errors.insufficientCredits');
+  if (code.includes('Atlas chat timed out')) return t('dramaStudio.errors.chatTimeout');
+  if (code.startsWith('script_timeout_refunded')) return t('dramaStudio.errors.scriptTimeoutRefunded');
+  if (code.startsWith('script_failed_refunded')) return t('dramaStudio.errors.scriptFailedRefunded');
   return code;
 }
 
@@ -116,7 +116,7 @@ function pollGen(getUrl: string): Promise<string> {
 export default function DramaStudioPage() {
   const { status } = useSession();
   const mounted = useMounted();
-  const { locale } = useI18n();
+  const { locale, t } = useI18n();
   const byokActive = useByokActive();
   const [topic, setTopic] = useState('');
   const [style, setStyle] = useState('epic');
@@ -281,7 +281,7 @@ export default function DramaStudioPage() {
 
   async function genScript() {
     if (status !== 'authenticated') { signIn('google'); return; }
-    if (!topic.trim()) { setErr(locale === 'zh' ? '请先输入一个主题或产品' : 'Please enter a topic or product first'); return; }
+    if (!topic.trim()) { setErr(t('dramaStudio.errors.topicRequired')); return; }
     setErr(null); setNotice(null); setBusy('script'); setScript(null); setShots([]); setCharAssets({}); setSceneAsset({ status: 'idle' }); setCreationId(''); creationIdRef.current = ''; setCompose({ status: 'idle', frac: 0, note: '', url: '' });
     try {
       const currentCredits = await refreshCredits();
@@ -291,9 +291,7 @@ export default function DramaStudioPage() {
         return;
       }
       // 段数:'auto' 完全交给 AI;否则传精确段数。每段时长始终由 AI 规划(可后期微调)。
-      setNotice(locale === 'zh'
-        ? 'AI 正在生成高质量剧本,通常需要 30-90 秒,请保持页面打开。'
-        : 'AI is writing a higher-quality script, usually 30-90 seconds. Keep this page open.');
+      setNotice(t('dramaStudio.writingNotice'));
       const j = await postJson('/api/drama-studio/script', { topic: topic.trim(), style, ...(segChoice !== 'auto' ? { segments: Number(segChoice) } : {}) }) as { script?: Script; model?: string };
       const s: Script = j.script || {};
       if (!s.segments?.length) throw new Error('script_empty');
@@ -350,7 +348,7 @@ export default function DramaStudioPage() {
     const marker: UploadAsset = { preview: dataUrl, uploading: true };
     let added = false;
     setProductAssets((prev) => { if (prev.length >= MAX_PRODUCT_IMAGES) return prev; added = true; return [...prev, marker]; });
-    if (!added) { setErr(locale === 'zh' ? `产品图最多 ${MAX_PRODUCT_IMAGES} 张` : `Up to ${MAX_PRODUCT_IMAGES} product images`); return; }
+    if (!added) { setErr(t('dramaStudio.errors.productLimit', { max: MAX_PRODUCT_IMAGES })); return; }
     try {
       const j = await postJson('/api/marketing-studio/upload', { dataUrl });
       setProductAssets((prev) => prev.map((p) => (p === marker ? { preview: dataUrl, url: j.url } : p)));
@@ -546,7 +544,7 @@ export default function DramaStudioPage() {
         ctx = await runAssets();
         const ready = (script.characters || []).every((c) => ctx.chars[c.key]?.status === 'done' && !!ctx.chars[c.key]?.url) && ctx.scene.status === 'done' && !!ctx.scene.url
           && (!(script.segments || []).some((s) => s.product) || (ctx.products?.length ?? 0) > 0); // 带货剧必须有产品图,否则镜间产品不一致
-        if (!ready) { setErr(locale === 'zh' ? '定妆图/场景图/产品图未全部成功,请在上方重试后再逐镜生成' : 'Some reference images failed — retry them above first'); return; }
+        if (!ready) { setErr(t('dramaStudio.errors.refsFailed')); return; }
       }
       for (let i = 0; i < script.segments.length; i++) {
         if (shotsRef.current[i]?.vid === 'done' && shotsRef.current[i]?.vidUrl) continue;
@@ -573,9 +571,9 @@ export default function DramaStudioPage() {
       try { const st = await postJson('/api/creations/start', { type: 'drama-studio', title: script?.title || topic.slice(0, 60) || '短剧', assets: buildDramaAssets(charAssets, sceneAsset, shotsRef.current) }); cid = st.id; setCreationId(cid); creationIdRef.current = cid; } catch { /* 占位失败不阻断 */ }
     }
     try {
-      setCompose({ status: 'run', frac: 0, note: locale === 'zh' ? '开始拼接' : 'Starting to stitch', url: '' });
+      setCompose({ status: 'run', frac: 0, note: t('dramaStudio.startingStitch'), url: '' });
       const blob = await composeAdReel(vidUrls, (p) => setCompose((c) => ({ ...c, status: 'run', frac: p.frac, note: p.note })));
-      setCompose({ status: 'done', frac: 1, note: locale === 'zh' ? '完成' : 'Done', url: URL.createObjectURL(blob) });
+      setCompose({ status: 'done', frac: 1, note: t('dramaStudio.complete'), url: URL.createObjectURL(blob) });
       try {
         const fd = new FormData();
         fd.append('file', blob, 'reel.mp4');
@@ -613,8 +611,8 @@ export default function DramaStudioPage() {
             <div className="w-7 h-7 rounded-lg grid place-items-center text-sm" style={{ background: ACCENT }}>🎭</div>
             <b className="text-sm tracking-tight">Drama Studio</b>
           </a>
-          <a href="/marketing-studio" className="text-xs text-white/60 hover:text-white transition">{locale === 'zh' ? '广告工作室' : 'Ad Studio'}</a>
-          <a href="/" className="text-xs text-white/60 hover:text-white transition">{locale === 'zh' ? '← 全部应用' : '← All apps'}</a>
+          <a href="/marketing-studio" className="text-xs text-white/60 hover:text-white transition">{t('dramaStudio.adStudio')}</a>
+          <a href="/" className="text-xs text-white/60 hover:text-white transition">← {t('dramaStudio.allApps')}</a>
         </div>
       </div>
 
@@ -622,9 +620,7 @@ export default function DramaStudioPage() {
       <div className="text-center pt-14 pb-10 px-6">
         <div className="text-[11px] uppercase tracking-[0.24em] text-white/50 font-medium mb-3" style={{ fontFamily: 'var(--font-grotesk), "Space Grotesk", sans-serif' }}>Drama Studio</div>
         <h1 className="font-bold uppercase leading-[1.08] tracking-[-0.03em] text-[clamp(40px,5.4vw,58px)] text-white/90" style={{ fontFamily: 'var(--font-grotesk), "Space Grotesk", system-ui, sans-serif' }}>
-          {locale === 'zh'
-            ? <>把任何主题<br />变成一部<span style={{ color: ACCENT }}>短剧</span></>
-            : <>Turn any topic<br />into a <span style={{ color: ACCENT }}>drama</span></>}
+          <>{t('dramaStudio.heroTop')}<br /><span style={{ color: ACCENT }}>{t('dramaStudio.heroBottom')}</span></>
         </h1>
       </div>
 
@@ -632,24 +628,24 @@ export default function DramaStudioPage() {
       <div className="max-w-4xl mx-auto px-4">
         <div className="rounded-3xl border border-white/[0.06] p-4 sm:p-5 shadow-[0_24px_70px_-24px_rgba(0,0,0,0.85)]" style={{ background: PANEL }}>
           <textarea value={topic} onChange={(e) => setTopic(e.target.value)} rows={3}
-            placeholder={locale === 'zh' ? '主题 / 产品,例如:社恐程序员第一次见挑剔的准丈母娘,靠一包纸巾力挽狂澜 / 史诗英雄推销一款平价保温杯……' : 'Topic / product, e.g. A shy programmer meets his picky future mother-in-law for the first time and saves the day with a pack of tissues / An epic hero pitches a budget thermos…'}
+            placeholder={t('dramaStudio.topicPlaceholder')}
             className="w-full bg-transparent text-[15px] leading-relaxed resize-none focus:outline-none placeholder:text-white/30 px-1 pt-1" />
           <div className="flex items-center gap-2 flex-wrap mt-3">
             {DRAMA_STYLES.map((s) => (
               <button key={s.id} onClick={() => setStyle(s.id)}
                 className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs transition border ${style === s.id ? 'border-[#7036F0] bg-[#7036F0]/15 text-white' : 'border-white/10 bg-white/[0.03] text-white/60 hover:bg-white/[0.06]'}`}>
-                <span>{s.emoji}</span>{locale === 'zh' ? ({ epic: '史诗奇幻', palace: '宫斗权谋', wuxia: '武侠江湖', family: '家庭伦理', office: '职场斗争', hero: '超级英雄' }[s.id] ?? s.label) : s.label}
+                <span>{s.emoji}</span>{t(`dramaStudio.styles.${s.id}`)}
               </button>
             ))}
           </div>
           <div className="flex items-center gap-2 flex-wrap mt-3">
-            <select value={segChoice} onChange={(e) => setSegChoice(e.target.value)} className={selCls} style={selStyle} title={locale === 'zh' ? '分镜段数:自动=AI 按剧情决定(4-6 段),或手动指定' : 'Number of scenes: auto (AI decides) or fixed'}>
-              <option value="auto">{locale === 'zh' ? '段数:自动' : 'Scenes: auto'}</option>
-              {[2, 3, 4, 5, 6, 8].map((n) => <option key={n} value={String(n)}>{locale === 'zh' ? `${n} 段` : `${n} scenes`}</option>)}
+            <select value={segChoice} onChange={(e) => setSegChoice(e.target.value)} className={selCls} style={selStyle} title={t('dramaStudio.sceneCountTitle')}>
+              <option value="auto">{t('dramaStudio.scenesAuto')}</option>
+              {[2, 3, 4, 5, 6, 8].map((n) => <option key={n} value={String(n)}>{t('dramaStudio.scenesCount', { n })}</option>)}
             </select>
-            <select value={videoRatio} onChange={(e) => setVideoRatio(e.target.value)} className={selCls} style={selStyle} title={locale === 'zh' ? '画面比例' : 'Aspect ratio'}>{VIDEO_RATIOS.map((r) => <option key={r} value={r}>{r}</option>)}</select>
-            <select value={videoResolution} onChange={(e) => setVideoResolution(e.target.value)} className={selCls} style={selStyle} title={locale === 'zh' ? '分辨率' : 'Resolution'}>{VIDEO_RESOLUTIONS.map((r) => <option key={r} value={r}>{r}</option>)}</select>
-            <span className="inline-flex items-center gap-1 px-2.5 py-2 rounded-lg text-[11px] text-white/45 bg-white/[0.03] border border-white/10" title={locale === 'zh' ? '每段时长由 AI 按节奏规划,生成后可逐段微调;段数用左侧下拉选自动或手动' : 'Per-scene duration is AI-planned (tweak per scene after); pick scene count on the left'}>⏱️ {locale === 'zh' ? '时长 AI 规划' : 'AI timing'}</span>
+            <select value={videoRatio} onChange={(e) => setVideoRatio(e.target.value)} className={selCls} style={selStyle} title={t('dramaStudio.aspectRatio')}>{VIDEO_RATIOS.map((r) => <option key={r} value={r}>{r}</option>)}</select>
+            <select value={videoResolution} onChange={(e) => setVideoResolution(e.target.value)} className={selCls} style={selStyle} title={t('dramaStudio.resolution')}>{VIDEO_RESOLUTIONS.map((r) => <option key={r} value={r}>{r}</option>)}</select>
+            <span className="inline-flex items-center gap-1 px-2.5 py-2 rounded-lg text-[11px] text-white/45 bg-white/[0.03] border border-white/10" title={t('dramaStudio.timingTitle')}>⏱️ {t('dramaStudio.timing')}</span>
             {/* 产品图上传(可选):带货短剧用你的真实产品锁一致性 */}
             <input ref={productInput} type="file" multiple accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => { const fs = e.target.files; if (fs && fs.length) void uploadProducts(fs); e.currentTarget.value = ''; }} />
             {productAssets.map((pa, idx) => (
@@ -658,27 +654,25 @@ export default function DramaStudioPage() {
                   {pa.preview && <img src={pa.preview} alt="product" className={`w-full h-full object-cover ${pa.url ? 'cursor-zoom-in' : ''}`} onClick={() => pa.url && setZoomImg(pa.url)} />}
                   {pa.uploading && <span className="absolute inset-0 bg-black/60 grid place-items-center"><Loader2 className="w-3 h-3 animate-spin text-white" /></span>}
                 </span>
-                <button onClick={() => setProductAssets((prev) => prev.filter((_, k) => k !== idx))} title={locale === 'zh' ? '移除' : 'Remove'} className="text-white/40 hover:text-white"><X className="w-3 h-3" /></button>
+                <button onClick={() => setProductAssets((prev) => prev.filter((_, k) => k !== idx))} title={t('common.remove')} className="text-white/40 hover:text-white"><X className="w-3 h-3" /></button>
               </span>
             ))}
             {productAssets.length < MAX_PRODUCT_IMAGES && (
-              <button onClick={() => productInput.current?.click()} className="inline-flex items-center gap-1 px-2.5 py-2 rounded-lg text-[11px] text-white/55 bg-white/[0.03] border border-white/10 hover:border-[#7036F0]/60 transition" title={locale === 'zh' ? `上传产品图(可选,最多 ${MAX_PRODUCT_IMAGES} 张):用你的真实产品原图直接作参考` : `Upload product photos (optional, up to ${MAX_PRODUCT_IMAGES}): your real product images used directly as reference`}>
-                <ImagePlus className="w-3.5 h-3.5" />{locale === 'zh' ? `产品图 ${productAssets.length}/${MAX_PRODUCT_IMAGES}` : `Product ${productAssets.length}/${MAX_PRODUCT_IMAGES}`}
+              <button onClick={() => productInput.current?.click()} className="inline-flex items-center gap-1 px-2.5 py-2 rounded-lg text-[11px] text-white/55 bg-white/[0.03] border border-white/10 hover:border-[#7036F0]/60 transition" title={t('dramaStudio.uploadProductTitle', { max: MAX_PRODUCT_IMAGES })}>
+                <ImagePlus className="w-3.5 h-3.5" />{t('dramaStudio.productCount', { count: productAssets.length, max: MAX_PRODUCT_IMAGES })}
               </button>
             )}
             <button onClick={genScript} disabled={busy !== null || !hasCreditsForScript}
               className="ml-auto px-6 py-2.5 rounded-xl font-extrabold text-sm inline-flex items-center gap-2 disabled:opacity-50 transition hover:brightness-110"
               style={{ background: `radial-gradient(90% 90% at 50% 120%, #a78bfa 0%, rgba(167,139,250,0) 60%), ${ACCENT}`, color: '#fff' }}>
-              {busy === 'script' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />} {byokActive ? (locale === 'zh' ? '生成剧本' : 'Write script') : <>{!hasCreditsForScript ? (locale === 'zh' ? '积分不足' : 'Not enough credits') : (locale === 'zh' ? '生成剧本' : 'Write script')} · ✦{DRAMA_COSTS.script}</>}
+              {busy === 'script' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />} {byokActive ? t('dramaStudio.writeScript') : <>{!hasCreditsForScript ? t('common.notEnoughCredits') : t('dramaStudio.writeScript')} · ✦{DRAMA_COSTS.script}</>}
             </button>
           </div>
           {status === 'authenticated' && (
             <div className="mt-3 text-center text-[11px] text-white/35">
               {byokActive
-                ? (locale === 'zh' ? '用自己的 Key · 不扣积分' : 'Your own key · no credits charged')
-                : locale === 'zh'
-                ? `完整流程预计 ${totalEst} 积分(剧本 ${DRAMA_COSTS.script},定妆图约 ${assetCost},每场景约 ${segVideoCost()}),当前余额 ${credits ?? '·'}。`
-                : `Full run estimate ${totalEst} credits (script ${DRAMA_COSTS.script}, cast/scene refs ~${assetCost}, ~${segVideoCost()}/scene), current balance ${credits ?? '·'}.`}
+                ? t('common.yourKeyNoCredits')
+                : t('dramaStudio.fullEstimate', { total: totalEst, script: DRAMA_COSTS.script, assets: assetCost, scene: segVideoCost(), credits: credits ?? '·' })}
             </div>
           )}
         </div>
@@ -690,18 +684,18 @@ export default function DramaStudioPage() {
           <button onClick={() => setZoomImg(null)} className="absolute top-4 right-4 text-white/70 hover:text-white" aria-label="close"><X className="w-6 h-6" /></button>
         </div>
       )}
-      {err && <div className="max-w-4xl mx-auto px-4 mt-6"><div className="flex items-center gap-2 text-sm text-red-400 bg-red-500/10 border border-red-500/25 rounded-lg px-3 py-2"><AlertCircle className="w-4 h-4" />{locale === 'zh' ? '错误' : 'Error'}: {dramaErrText(err, locale)}</div></div>}
+      {err && <div className="max-w-4xl mx-auto px-4 mt-6"><div className="flex items-center gap-2 text-sm text-red-400 bg-red-500/10 border border-red-500/25 rounded-lg px-3 py-2"><AlertCircle className="w-4 h-4" />{t('dramaStudio.error')}: {dramaErrText(err, t)}</div></div>}
       {notice && <div className="max-w-4xl mx-auto px-4 mt-6"><div className="flex items-center gap-2 text-sm text-amber-300 bg-amber-500/10 border border-amber-500/25 rounded-lg px-3 py-2"><AlertCircle className="w-4 h-4" />{notice}</div></div>}
 
       {/* 剧本展示 */}
       {script && (
         <div ref={storyboardRef} className="max-w-3xl mx-auto px-4 py-10 scroll-mt-6">
           <div className="rounded-3xl border border-white/[0.06] p-5" style={{ background: PANEL }}>
-            <div className="flex items-center gap-2 mb-1"><Wand2 className="w-4 h-4" style={{ color: ACCENT }} /><b className="text-lg">{script.title || (locale === 'zh' ? '未命名剧本' : 'Untitled script')}</b></div>
+            <div className="flex items-center gap-2 mb-1"><Wand2 className="w-4 h-4" style={{ color: ACCENT }} /><b className="text-lg">{script.title || t('dramaStudio.untitledScript')}</b></div>
             {script.logline && <p className="text-sm text-white/60 mb-3">{script.logline}</p>}
             {!!script.characters?.length && (
               <div className="mb-4">
-                <div className="text-xs text-white/45 mb-2">🎭 {locale === 'zh' ? '角色定妆(生成视频时先出定妆图,锁住每个角色跨镜头长相一致)' : 'Cast — reference portraits are generated first to lock each character’s look across shots'}</div>
+                <div className="text-xs text-white/45 mb-2">🎭 {t('dramaStudio.castIntro')}</div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {script.characters.map((c) => {
                     const a = charAssets[c.key];
@@ -719,14 +713,14 @@ export default function DramaStudioPage() {
                             <div className="text-[10px] text-white/50 overflow-hidden" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{c.persona}</div>
                           </div>
                           <div className="flex flex-col gap-1 shrink-0">
-                            <button onClick={() => genOneCharacter(c.key)} disabled={a?.status === 'run' || busy === 'assets' || busy === 'all'} title={locale === 'zh' ? '重新生成这个角色的定妆图' : 'Regenerate this portrait'} className="p-1 rounded hover:bg-white/10 disabled:opacity-40 transition"><RefreshCw className={`w-3.5 h-3.5 text-white/60 ${a?.status === 'run' ? 'animate-spin' : ''}`} /></button>
-                            <button onClick={() => setEditingChar(editingChar === c.key ? null : c.key)} title={locale === 'zh' ? '编辑角色外观提示词' : 'Edit appearance prompt'} className={`p-1 rounded hover:bg-white/10 transition ${editingChar === c.key ? 'bg-white/10' : ''}`}><Pencil className="w-3.5 h-3.5 text-white/60" /></button>
+                            <button onClick={() => genOneCharacter(c.key)} disabled={a?.status === 'run' || busy === 'assets' || busy === 'all'} title={t('dramaStudio.regeneratePortraitTitle')} className="p-1 rounded hover:bg-white/10 disabled:opacity-40 transition"><RefreshCw className={`w-3.5 h-3.5 text-white/60 ${a?.status === 'run' ? 'animate-spin' : ''}`} /></button>
+                            <button onClick={() => setEditingChar(editingChar === c.key ? null : c.key)} title={t('dramaStudio.editAppearanceTitle')} className={`p-1 rounded hover:bg-white/10 transition ${editingChar === c.key ? 'bg-white/10' : ''}`}><Pencil className="w-3.5 h-3.5 text-white/60" /></button>
                           </div>
                         </div>
                         {editingChar === c.key && (
                           <div className="mt-2">
-                            <textarea value={c.appearance || ''} onChange={(e) => editCharAppearance(c.key, e.target.value)} rows={3} placeholder={locale === 'zh' ? '角色外观(英文最佳:年龄/发型/服装/神态/布光…),改完点下方重新生成' : 'Appearance in English (age/hair/outfit/expression/lighting)…'} className="w-full bg-white/5 border border-white/10 rounded px-2 py-1 text-[11px] text-white/80 resize-y focus:outline-none focus:border-[#7036F0]" />
-                            <button onClick={() => { setEditingChar(null); void genOneCharacter(c.key); }} disabled={a?.status === 'run'} className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-lg disabled:opacity-40 transition" style={{ background: ACCENT, color: '#fff' }}><RefreshCw className="w-3 h-3" />{locale === 'zh' ? `改词并重新生成 · ✦${DRAMA_COSTS.image}` : `Regenerate · ✦${DRAMA_COSTS.image}`}</button>
+                            <textarea value={c.appearance || ''} onChange={(e) => editCharAppearance(c.key, e.target.value)} rows={3} placeholder={t('dramaStudio.appearancePlaceholder')} className="w-full bg-white/5 border border-white/10 rounded px-2 py-1 text-[11px] text-white/80 resize-y focus:outline-none focus:border-[#7036F0]" />
+                            <button onClick={() => { setEditingChar(null); void genOneCharacter(c.key); }} disabled={a?.status === 'run'} className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-lg disabled:opacity-40 transition" style={{ background: ACCENT, color: '#fff' }}><RefreshCw className="w-3 h-3" />{t('dramaStudio.regenerateWithEdit', { cost: DRAMA_COSTS.image })}</button>
                           </div>
                         )}
                       </div>
@@ -744,9 +738,9 @@ export default function DramaStudioPage() {
                       : sceneAsset.status === 'fail' ? <AlertCircle className="w-3 h-3 text-red-400" /> : null}
                   </span>
                 )}
-                <span className="flex-1 min-w-0 truncate">🎬 {locale === 'zh' ? '场景设定' : 'Setting'}: {script.setting}</span>
-                {sceneAsset.status === 'fail' && sceneAsset.err && <span className="text-red-400 truncate max-w-[28%]" title={sceneAsset.err}>{dramaErrText(sceneAsset.err, locale)}</span>}
-                <button onClick={genOneScene} disabled={sceneAsset.status === 'run' || busy === 'assets' || busy === 'all'} title={locale === 'zh' ? '重新生成场景图' : 'Regenerate scene image'} className="p-1 rounded hover:bg-white/10 disabled:opacity-40 transition shrink-0"><RefreshCw className={`w-3.5 h-3.5 text-white/60 ${sceneAsset.status === 'run' ? 'animate-spin' : ''}`} /></button>
+                <span className="flex-1 min-w-0 truncate">🎬 {t('dramaStudio.setting')}: {script.setting}</span>
+                {sceneAsset.status === 'fail' && sceneAsset.err && <span className="text-red-400 truncate max-w-[28%]" title={sceneAsset.err}>{dramaErrText(sceneAsset.err, t)}</span>}
+                <button onClick={genOneScene} disabled={sceneAsset.status === 'run' || busy === 'assets' || busy === 'all'} title={t('dramaStudio.regenerateSceneTitle')} className="p-1 rounded hover:bg-white/10 disabled:opacity-40 transition shrink-0"><RefreshCw className={`w-3.5 h-3.5 text-white/60 ${sceneAsset.status === 'run' ? 'animate-spin' : ''}`} /></button>
               </div>
             )}
             <div className="space-y-2">
@@ -755,9 +749,9 @@ export default function DramaStudioPage() {
                 return (
                   <div key={i} className="rounded-xl border border-white/10 bg-black/20 p-3">
                     <div className="flex items-center gap-2 mb-2 flex-wrap">
-                      <span className="text-[11px] rounded-full px-2 py-0.5 bg-white/5 border border-white/10" style={{ color: ACCENT }}>{locale === 'zh' ? `场景 ${seg.i}` : `Scene ${seg.i}`}</span>
+                      <span className="text-[11px] rounded-full px-2 py-0.5 bg-white/5 border border-white/10" style={{ color: ACCENT }}>{t('dramaStudio.scene', { n: seg.i })}</span>
                       {/* 每段时长:AI 给建议值,用户可微调 */}
-                      <select value={seg.durationSec || 8} onChange={(e) => setSegDuration(i, Number(e.target.value))} className="dark-select appearance-none bg-white/[0.06] rounded px-1.5 py-0.5 text-[10px] text-white/80 focus:outline-none focus:ring-1 focus:ring-[#7036F0]" title={locale === 'zh' ? '本段时长(秒),AI 规划可微调' : 'Scene duration (s), AI-planned & adjustable'}>{VIDEO_DURATIONS.map((d) => <option key={d} value={d}>{d}s</option>)}</select>
+                      <select value={seg.durationSec || 8} onChange={(e) => setSegDuration(i, Number(e.target.value))} className="dark-select appearance-none bg-white/[0.06] rounded px-1.5 py-0.5 text-[10px] text-white/80 focus:outline-none focus:ring-1 focus:ring-[#7036F0]" title={t('dramaStudio.sceneDurationTitle')}>{VIDEO_DURATIONS.map((d) => <option key={d} value={d}>{d}s</option>)}</select>
                       {/* 出场角色(对应定妆图参考) */}
                       {(seg.cast || []).map((k) => {
                         const c = script.characters?.find((x) => x.key === k);
@@ -765,22 +759,22 @@ export default function DramaStudioPage() {
                       })}
                       {/* 产品出镜开关:仅在上传了产品图时显示;点亮的段合成时带产品图作参考锁一致性 */}
                       {productAssets.some((p) => p.url) && (
-                        <button onClick={() => setSegProduct(i, !seg.product)} title={locale === 'zh' ? '该段是否出现产品(点击切换);点亮时用你上传的产品图锁一致性' : 'Toggle product in this shot; when on, uses your uploaded product image'} className={`text-[10px] rounded-full px-1.5 py-0.5 border transition ${seg.product ? 'bg-[#7036F0]/20 border-[#7036F0]/50 text-white' : 'bg-white/5 border-white/10 text-white/40'}`}>🛍️ {locale === 'zh' ? '产品' : 'Product'}</button>
+                        <button onClick={() => setSegProduct(i, !seg.product)} title={t('dramaStudio.productToggleTitle')} className={`text-[10px] rounded-full px-1.5 py-0.5 border transition ${seg.product ? 'bg-[#7036F0]/20 border-[#7036F0]/50 text-white' : 'bg-white/5 border-white/10 text-white/40'}`}>🛍️ {t('dramaStudio.product')}</button>
                       )}
                       {seg.hook && <span className="text-[10px] text-white/40">💡 {seg.hook}</span>}
-                      {st && <StatusChip icon={<Video className="w-3 h-3" />} label={locale === 'zh' ? '图片' : 'Image'} s={st.img} />}
-                      {st && <StatusChip icon={<Film className="w-3 h-3" />} label={locale === 'zh' ? '视频' : 'Video'} s={st.vid} />}
+                      {st && <StatusChip icon={<Video className="w-3 h-3" />} label={t('dramaStudio.image')} s={st.img} />}
+                      {st && <StatusChip icon={<Film className="w-3 h-3" />} label={t('dramaStudio.video')} s={st.vid} />}
                     </div>
-                    <input value={seg.scene} onChange={(e) => editSeg(i, 'scene', e.target.value)} className="w-full mb-1.5 bg-white/5 border border-white/10 rounded px-2 py-1 text-xs text-white/80 focus:outline-none focus:border-[#7036F0]" placeholder={locale === 'zh' ? '镜头 / 构图' : 'Shot / framing'} />
-                    <textarea value={seg.action} onChange={(e) => editSeg(i, 'action', e.target.value)} rows={2} className="w-full mb-1.5 bg-white/5 border border-white/10 rounded px-2 py-1 text-xs text-white/80 resize-y focus:outline-none focus:border-[#7036F0]" placeholder={locale === 'zh' ? '剧情 / 动作' : 'Plot / action'} />
-                    <input value={seg.dialogue || ''} onChange={(e) => editSeg(i, 'dialogue', e.target.value)} className="w-full bg-white/5 border border-white/10 rounded px-2 py-1 text-xs text-white/70 focus:outline-none focus:border-[#7036F0]" placeholder={locale === 'zh' ? '台词(可选)' : 'Dialogue (optional)'} />
+                    <input value={seg.scene} onChange={(e) => editSeg(i, 'scene', e.target.value)} className="w-full mb-1.5 bg-white/5 border border-white/10 rounded px-2 py-1 text-xs text-white/80 focus:outline-none focus:border-[#7036F0]" placeholder={t('dramaStudio.shotPlaceholder')} />
+                    <textarea value={seg.action} onChange={(e) => editSeg(i, 'action', e.target.value)} rows={2} className="w-full mb-1.5 bg-white/5 border border-white/10 rounded px-2 py-1 text-xs text-white/80 resize-y focus:outline-none focus:border-[#7036F0]" placeholder={t('dramaStudio.actionPlaceholder')} />
+                    <input value={seg.dialogue || ''} onChange={(e) => editSeg(i, 'dialogue', e.target.value)} className="w-full bg-white/5 border border-white/10 rounded px-2 py-1 text-xs text-white/70 focus:outline-none focus:border-[#7036F0]" placeholder={t('dramaStudio.dialoguePlaceholder')} />
                     <div className="mt-2 flex items-center gap-2 flex-wrap">
-                      <button onClick={() => genOneShot(i)} disabled={!assetsReady || busy === 'all' || busy === 'assets' || st?.img === 'run' || st?.vid === 'run'} title={!assetsReady ? (locale === 'zh' ? '请先在下方生成定妆图 + 场景图' : 'Generate portraits + scene first') : ''} className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg disabled:opacity-40 transition" style={st?.vid === 'done' ? { border: '1px solid rgba(255,255,255,0.15)', color: '#fff' } : { background: ACCENT, color: '#fff' }}>
+                      <button onClick={() => genOneShot(i)} disabled={!assetsReady || busy === 'all' || busy === 'assets' || st?.img === 'run' || st?.vid === 'run'} title={!assetsReady ? t('dramaStudio.generateRefsFirst') : ''} className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg disabled:opacity-40 transition" style={st?.vid === 'done' ? { border: '1px solid rgba(255,255,255,0.15)', color: '#fff' } : { background: ACCENT, color: '#fff' }}>
                         {(st?.img === 'run' || st?.vid === 'run') ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Video className="w-3.5 h-3.5" />}
-                        {st?.vid === 'done' ? (locale === 'zh' ? '重新生成' : 'Regenerate') : (st?.img === 'fail' || st?.vid === 'fail') ? (locale === 'zh' ? '重试本镜' : 'Retry') : (locale === 'zh' ? `生成本镜 · ✦${segVideoCost(seg)}` : `Generate · ✦${segVideoCost(seg)}`)}
+                        {st?.vid === 'done' ? t('dramaStudio.regenerate') : (st?.img === 'fail' || st?.vid === 'fail') ? t('dramaStudio.retryShot') : t('dramaStudio.generateShot', { cost: segVideoCost(seg) })}
                       </button>
-                      {st?.vid === 'done' && !!st?.vidUrl && <span className="text-[11px] text-emerald-400">✓ {locale === 'zh' ? '已完成' : 'Done'}</span>}
-                      {st?.err && <span className="text-[11px] text-red-400 truncate max-w-[55%]" title={st.err}>{dramaErrText(st.err, locale)}</span>}
+                      {st?.vid === 'done' && !!st?.vidUrl && <span className="text-[11px] text-emerald-400">✓ {t('dramaStudio.done')}</span>}
+                      {st?.err && <span className="text-[11px] text-red-400 truncate max-w-[55%]" title={st.err}>{dramaErrText(st.err, t)}</span>}
                     </div>
                     {st?.vid === 'done' && st.vidUrl && (
                       <video src={st.vidUrl} poster={st.imgUrl} controls playsInline className="mt-2 w-full max-w-[220px] rounded-lg border border-white/10 bg-black" />
@@ -789,22 +783,22 @@ export default function DramaStudioPage() {
                 );
               })}
             </div>
-            {script.climax && <div className="mt-3 text-xs text-white/50">🔥 {locale === 'zh' ? '高潮' : 'Climax'}: {script.climax}</div>}
+            {script.climax && <div className="mt-3 text-xs text-white/50">🔥 {t('dramaStudio.climax')}: {script.climax}</div>}
             <div className="mt-4 flex flex-wrap items-center gap-2">
               {/* ① 先出定妆图 + 场景图(失败的可再点重试,只补跑未完成的) */}
               <button onClick={genAssets} disabled={busy !== null || anyShotRunning} className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-bold disabled:opacity-50 border border-white/15 hover:border-[#7036F0] transition">
-                {busy === 'assets' ? <Loader2 className="w-4 h-4 animate-spin" /> : <span className="text-sm">①</span>} {assetsReady ? (locale === 'zh' ? '定妆图/场景已就绪 ✓' : 'Reference ready ✓') : (locale === 'zh' ? `生成定妆图+场景 · ✦${assetCost}` : `Portraits + scene · ✦${assetCost}`)}
+                {busy === 'assets' ? <Loader2 className="w-4 h-4 animate-spin" /> : <span className="text-sm">①</span>} {assetsReady ? t('dramaStudio.refsReady') : t('dramaStudio.generateRefs', { cost: assetCost })}
               </button>
               {/* ② 全部生成:依次逐镜,某镜失败不影响其他,可单独重试 */}
               <button onClick={genAllShots} disabled={busy !== null || !hasCreditsForVideo || anyShotRunning} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-extrabold disabled:opacity-50" style={{ background: ACCENT, color: '#fff' }}>
-                {busy === 'all' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Video className="w-4 h-4" />} {byokActive ? (locale === 'zh' ? '全部生成' : 'Generate all') : <>{!hasCreditsForVideo ? (locale === 'zh' ? '积分不足' : 'Not enough credits') : (locale === 'zh' ? '全部生成' : 'Generate all')} · ✦{videoEst}</>}
+                {busy === 'all' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Video className="w-4 h-4" />} {byokActive ? t('dramaStudio.generateAll') : <>{!hasCreditsForVideo ? t('common.notEnoughCredits') : t('dramaStudio.generateAll')} · ✦{videoEst}</>}
               </button>
               {/* ③ 拼接:所有分镜视频都完成才可点 */}
-              <button onClick={composeVideo} disabled={!allVidsDone || busy !== null || compose.status === 'run' || anyShotRunning} title={allVidsDone ? '' : (locale === 'zh' ? '所有分镜视频完成后才能拼接' : 'Available after every shot is done')} className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-bold disabled:opacity-40 border border-white/15 hover:border-[#7036F0] transition">
-                {compose.status === 'run' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Film className="w-4 h-4" />} {locale === 'zh' ? '拼接成片' : 'Stitch final'}
+              <button onClick={composeVideo} disabled={!allVidsDone || busy !== null || compose.status === 'run' || anyShotRunning} title={allVidsDone ? '' : t('dramaStudio.stitchAvailableTitle')} className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-bold disabled:opacity-40 border border-white/15 hover:border-[#7036F0] transition">
+                {compose.status === 'run' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Film className="w-4 h-4" />} {t('dramaStudio.stitchFinal')}
               </button>
             </div>
-            <div className="text-[11px] text-white/40 mt-2">{locale === 'zh' ? '生成过程请保持本页面打开(成片在你的浏览器本地拼接)。' : 'Keep this page open during generation (the final cut is stitched locally in your browser).'}</div>
+            <div className="text-[11px] text-white/40 mt-2">{t('dramaStudio.keepOpen')}</div>
           </div>
         </div>
       )}
@@ -815,13 +809,13 @@ export default function DramaStudioPage() {
           <div className="rounded-3xl border border-white/[0.06] p-5" style={{ background: PANEL }}>
             <div className="flex items-center gap-2 text-sm mb-2">
               {compose.status === 'done' ? <CheckCircle2 className="w-4 h-4" style={{ color: ACCENT }} /> : compose.status === 'fail' ? <AlertCircle className="w-4 h-4 text-red-400" /> : <Loader2 className="w-4 h-4 animate-spin" style={{ color: ACCENT }} />}
-              <b>{compose.status === 'done' ? (locale === 'zh' ? '视频已就绪' : 'Video ready') : compose.status === 'fail' ? (locale === 'zh' ? '拼接失败' : 'Stitching failed') : (locale === 'zh' ? '拼接中' : 'Stitching')}</b><span className="text-xs text-white/40">{compose.note}</span>
+              <b>{compose.status === 'done' ? t('dramaStudio.videoReady') : compose.status === 'fail' ? t('dramaStudio.stitchingFailed') : t('dramaStudio.stitching')}</b><span className="text-xs text-white/40">{compose.note}</span>
             </div>
             {compose.status === 'run' && <div className="h-1.5 bg-white/10 rounded-full overflow-hidden"><div className="h-full transition-all" style={{ width: `${Math.round(compose.frac * 100)}%`, background: ACCENT }} /></div>}
             {compose.url && (
               <div className="mt-3">
                 <video controls autoPlay muted src={compose.url} className="w-full max-w-[300px] rounded-xl border border-white/10" />
-                <a href={compose.url} download="drama.mp4" className="mt-2 inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border border-white/15 hover:border-[#7036F0]"><Download className="w-4 h-4" />{locale === 'zh' ? '下载' : 'Download'}</a>
+                <a href={compose.url} download="drama.mp4" className="mt-2 inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border border-white/15 hover:border-[#7036F0]"><Download className="w-4 h-4" />{t('dramaStudio.download')}</a>
               </div>
             )}
           </div>

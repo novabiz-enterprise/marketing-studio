@@ -47,17 +47,17 @@ export default function Home() {
       <div className="px-6 sm:px-8 py-5">
         <div className="mx-auto flex w-full max-w-6xl items-center gap-3">
           <div className="w-7 h-7 rounded-lg grid place-items-center text-sm font-bold" style={{ background: '#7036F0', color: '#fff' }}>✦</div>
-          <b className="text-sm tracking-tight">Marketing Studio</b>
+          <b className="text-sm tracking-tight">InstaTak</b>
         </div>
       </div>
 
       {/* hero */}
       <div className="text-center pt-14 pb-12 px-6">
-        <div className="text-[11px] uppercase tracking-[0.24em] text-white/50 font-medium mb-3" style={{ fontFamily: 'var(--font-grotesk), "Space Grotesk", sans-serif' }}>Marketing Studio</div>
+        <div className="text-[11px] uppercase tracking-[0.24em] text-white/50 font-medium mb-3" style={{ fontFamily: 'var(--font-grotesk), "Space Grotesk", sans-serif' }}>InstaTak</div>
         <h1 className="font-bold uppercase leading-[1.06] tracking-[-0.03em] text-[clamp(38px,5.2vw,56px)] text-white/90" style={{ fontFamily: 'var(--font-grotesk), "Space Grotesk", system-ui, sans-serif' }}>
-          {locale === 'zh' ? (<>你的 AI<br /><span style={{ color: '#7036F0' }}>创作工作室</span></>) : (<>Your AI<br /><span style={{ color: '#7036F0' }}>Creative Studio</span></>)}
+          <>{t('home.immersiveTitleTop')}<br /><span style={{ color: '#7036F0' }}>{t('home.immersiveTitleHighlight')}</span></>
         </h1>
-        <p className="mx-auto mt-5 max-w-xl text-white/50">{locale === 'zh' ? `${featured.length} 个精品应用 · 上传即出片 · 每一步真调 Atlas` : `${featured.length} premium apps · upload and ship · every step powered by Atlas`}</p>
+        <p className="mx-auto mt-5 max-w-xl text-white/50">{t('home.immersiveSubtitle', { count: featured.length })}</p>
       </div>
 
       {/* 精品应用卡片 */}
@@ -76,7 +76,7 @@ export default function Home() {
                   <span className="flex h-12 w-12 items-center justify-center rounded-xl transition duration-300 group-hover:scale-110" style={{ background: 'rgba(112,54,240,0.15)', color: '#a78bfa' }}>
                     <Icon className="h-6 w-6" />
                   </span>
-                  <span className="rounded-full px-2.5 py-1 text-[10px] font-semibold" style={{ background: 'rgba(112,54,240,0.15)', color: '#c4b5fd' }}>⭐ {locale === 'zh' ? '精品' : 'Featured'}</span>
+                  <span className="rounded-full px-2.5 py-1 text-[10px] font-semibold" style={{ background: 'rgba(112,54,240,0.15)', color: '#c4b5fd' }}>⭐ {t('home.featuredBadge')}</span>
                 </div>
                 <h3 className="mt-4 font-bold tracking-tight">{appTitle(app.id, a.title, locale)}</h3>
                 <p className="mt-1 text-sm text-white/50 leading-relaxed">{appDesc(app.id, a.description, locale)}</p>

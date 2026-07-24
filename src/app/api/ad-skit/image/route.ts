@@ -1,4 +1,4 @@
-import { withAtlas } from '@/lib/request-context';
+import { runWithProviderKeys, withAtlas } from '@/lib/request-context';
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
@@ -27,7 +27,7 @@ async function __byokPOST(req: Request) {
     if (valid.some((u) => u.length > 8_000_000)) return NextResponse.json({ error: 'image_too_large' }, { status: 400 });
     try {
       const productUrls = await Promise.all(
-        valid.map((u) => (u.startsWith('data:') ? uploadMedia(u, 'ad-skit-product') : Promise.resolve(u))),
+        valid.map((u) => (u.startsWith('data:') ? runWithProviderKeys({}, () => uploadMedia(u, 'ad-skit-product')) : Promise.resolve(u))),
       );
       return NextResponse.json({ productUrls: productUrls.filter((u) => typeof u === 'string' && u.startsWith('http')) });
     } catch (e) {

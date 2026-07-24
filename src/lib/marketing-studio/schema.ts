@@ -1,5 +1,5 @@
 /**
- * Marketing Studio 分镜计划校验(手写,风格对齐 product-ad-lab/schema.ts,不引第三方)。
+ * InstaTak 分镜计划校验(手写,风格对齐 product-ad-lab/schema.ts,不引第三方)。
  */
 export interface AdShot {
   i: number;
