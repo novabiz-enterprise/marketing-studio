@@ -1,30 +1,12 @@
-import { getCloudflareContext } from '@opennextjs/cloudflare';
+import { getMediaObject, headMediaObject, type StoredMediaHead } from '@/lib/r2-storage';
 
 export const dynamic = 'force-dynamic';
 
 // 从 R2 读转存好的媒体,加 CORS + 可内联播放头。
 // 关键:支持 HTTP Range(206) —— <video> 元素播放必须靠 range 分段,否则加载不出来。
-type R2HeadLike = {
-  size: number;
-  httpMetadata?: { contentType?: string };
-};
-type R2ObjectLike = {
-  body: ReadableStream;
-};
-type R2BucketLike = {
-  head(key: string): Promise<R2HeadLike | null>;
-  get(key: string, opts?: { range?: { offset: number; length: number } }): Promise<R2ObjectLike | null>;
-};
-
-function getBucket() {
-  const { env } = getCloudflareContext();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (env as any).MEDIA_BUCKET as R2BucketLike | undefined;
-}
-
-function baseHeaders(meta: R2HeadLike) {
+function baseHeaders(meta: StoredMediaHead) {
   return {
-    'Content-Type': meta.httpMetadata?.contentType || 'application/octet-stream',
+    'Content-Type': meta.contentType || 'application/octet-stream',
     'Accept-Ranges': 'bytes',
     'Access-Control-Allow-Origin': '*',
     'Cache-Control': 'public, max-age=31536000, immutable',
@@ -45,10 +27,7 @@ function parseRange(value: string | null, size: number) {
 }
 
 async function serveMedia(req: Request, key: string, includeBody: boolean) {
-  const bucket = getBucket();
-  if (!bucket) return new Response('bucket not bound', { status: 500 });
-
-  const meta = await bucket.head(key);
+  const meta = await headMediaObject(key);
   if (!meta) return new Response('not found', { status: 404 });
   const size = meta.size;
   const base = baseHeaders(meta);
@@ -69,7 +48,7 @@ async function serveMedia(req: Request, key: string, includeBody: boolean) {
         headers: { ...base, 'Content-Range': `bytes ${start}-${end}/${size}`, 'Content-Length': String(length) },
       });
     }
-    const obj = await bucket.get(key, { range: { offset: start, length } });
+    const obj = await getMediaObject(key, { offset: start, length });
     if (!obj) return new Response('not found', { status: 404 });
     return new Response(obj.body as unknown as BodyInit, {
       status: 206,
@@ -80,7 +59,7 @@ async function serveMedia(req: Request, key: string, includeBody: boolean) {
   if (!includeBody) {
     return new Response(null, { headers: { ...base, 'Content-Length': String(size) } });
   }
-  const obj = await bucket.get(key);
+  const obj = await getMediaObject(key);
   if (!obj) return new Response('not found', { status: 404 });
   return new Response(obj.body as unknown as BodyInit, { headers: { ...base, 'Content-Length': String(size) } });
 }

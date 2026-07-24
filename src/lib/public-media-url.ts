@@ -1,4 +1,5 @@
 const MEDIA_PATH_PREFIX = '/api/marketing-studio/media/';
+const DOWNLOAD_PATH = '/api/download';
 
 const PUBLIC_ORIGIN_ENV_KEYS = [
   'PUBLIC_MEDIA_BASE_URL',
@@ -77,9 +78,42 @@ export function sameOriginMediaPath(value: unknown, req: Request): string {
   return '';
 }
 
+function sameOriginOpenRouterProxyPath(value: unknown, req: Request): string {
+  const s = typeof value === 'string' ? value.trim() : '';
+  if (!s) return '';
+
+  let u: URL;
+  try {
+    if (s.startsWith(DOWNLOAD_PATH)) {
+      u = new URL(s, publicOriginForRequest(req));
+    } else if (/^https?:\/\//i.test(s)) {
+      u = new URL(s);
+      const requestOrigin = new URL(publicOriginForRequest(req)).origin;
+      if (u.origin !== requestOrigin) return '';
+    } else {
+      return '';
+    }
+  } catch {
+    return '';
+  }
+
+  if (u.pathname !== DOWNLOAD_PATH || u.searchParams.get('proxy') !== '1') return '';
+  const proxied = u.searchParams.get('url') || '';
+  try {
+    const source = new URL(proxied);
+    if (!/(^|\.)openrouter\.ai$/.test(source.hostname)) return '';
+    if (!/^\/api\/v1\/videos\/[^/]+\/content$/.test(source.pathname)) return '';
+    return `${u.pathname}${u.search}`;
+  } catch {
+    return '';
+  }
+}
+
 export function deliverableMediaUrl(value: unknown, req: Request): string {
   const path = sameOriginMediaPath(value, req);
   if (path) return path;
+  const proxy = sameOriginOpenRouterProxyPath(value, req);
+  if (proxy) return proxy;
   const s = typeof value === 'string' ? value.trim() : '';
   return isPublicHttpUrl(s) ? s : '';
 }

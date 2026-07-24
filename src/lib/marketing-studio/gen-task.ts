@@ -46,6 +46,7 @@ export async function chargeAndSubmit(opts: {
   templateId: string;
   model: string;
   prompt?: string;
+  creationId?: string;
   submit: () => Promise<{ id: string; getUrl: string }>;
 }): Promise<{ id: string; getUrl: string }> {
   try {
@@ -64,6 +65,21 @@ export async function chargeAndSubmit(opts: {
   }
 
   try {
+    const chargedCost = isByok() ? 0 : opts.cost;
+    if (opts.creationId) {
+      const upd = await prisma.creation.updateMany({
+        where: { id: opts.creationId, userId: opts.uid, status: 'processing' },
+        data: {
+          model: opts.model,
+          prompt: (opts.prompt || '').slice(0, 500),
+          taskId: res.id,
+          getUrl: res.getUrl,
+          cost: chargedCost,
+        },
+      });
+      if (upd.count === 1) return res;
+    }
+
     await prisma.creation.create({
       data: {
         userId: opts.uid,
@@ -73,7 +89,7 @@ export async function chargeAndSubmit(opts: {
         status: 'processing',
         taskId: res.id,
         getUrl: res.getUrl,
-        cost: isByok() ? 0 : opts.cost,
+        cost: chargedCost,
       },
     });
   } catch (e) {

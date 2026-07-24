@@ -2,7 +2,7 @@ import { withProviderKeys } from '@/lib/request-context';
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { getCloudflareContext } from '@opennextjs/cloudflare';
+import { putMediaObject } from '@/lib/r2-storage';
 
 export const maxDuration = 60;
 const AD_REF_MAX_VIDEO_BYTES = 60_000_000;
@@ -59,12 +59,8 @@ async function __byokPOST(req: Request) {
   if (buffer.byteLength > max) return NextResponse.json({ error: 'file_too_large', maxBytes: max }, { status: 400 });
 
   try {
-    const { env } = getCloudflareContext();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const bucket = (env as any).MEDIA_BUCKET;
-    if (!bucket) return NextResponse.json({ error: 'bucket_not_bound' }, { status: 500 });
     const key = `adref-${crypto.randomUUID()}.${ext}`;
-    await bucket.put(key, buffer, { httpMetadata: { contentType: ct } });
+    if (!(await putMediaObject(key, buffer, ct))) return NextResponse.json({ error: 'bucket_not_bound' }, { status: 500 });
     return NextResponse.json({ url: `/api/marketing-studio/media/${key}` });
   } catch (e) {
     return NextResponse.json({ error: 'upload_failed', detail: String(e) }, { status: 502 });

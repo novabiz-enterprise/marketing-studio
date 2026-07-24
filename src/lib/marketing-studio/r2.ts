@@ -1,5 +1,5 @@
-import { getCloudflareContext } from '@opennextjs/cloudflare';
 import { isOpenRouterVideoUrl, mediaFetchHeadersForUrl } from '@/lib/openrouter';
+import { getMediaObject, putMediaObject } from '@/lib/r2-storage';
 
 // Provider outputs can be temporary/download-only. Store them in our own R2
 // bucket and return same-origin, inline-playable URLs when available.
@@ -65,17 +65,13 @@ export async function persistToR2(sourceUrl: string): Promise<string> {
   if (!/^https?:\/\//.test(sourceUrl)) return sourceUrl;
   const fallback = playableMediaUrl(sourceUrl);
   try {
-    const { env } = getCloudflareContext();
-    const bucket = (env as unknown as { MEDIA_BUCKET?: R2BucketLike }).MEDIA_BUCKET;
-    if (!bucket) return fallback;
     // 后端 fetch 不受浏览器 CORS/force-download 限制;不带 Referer 绕过 OSS 防盗链。
     const res = await fetch(sourceUrl, { headers: { 'User-Agent': 'Mozilla/5.0', ...(mediaFetchHeadersForUrl(sourceUrl) || {}) }, cache: 'no-store' });
     if (!res.ok) return fallback;
     const buf = await res.arrayBuffer();
     const media = sniffMedia(buf, res.headers.get('content-type') || 'application/octet-stream');
     const key = `${crypto.randomUUID()}.${media.extension}`;
-    await bucket.put(key, buf, { httpMetadata: { contentType: media.contentType } });
-    return `/api/marketing-studio/media/${key}`;
+    return (await putMediaObject(key, buf, media.contentType)) ? `/api/marketing-studio/media/${key}` : fallback;
   } catch {
     return fallback;
   }
@@ -88,29 +84,16 @@ export async function mediaToDataUri(url: string): Promise<string> {
   const m = /\/media\/([^/?#]+)/.exec(url || '');
   if (!m) return '';
   try {
-    const { env } = getCloudflareContext();
-    const bucket = (env as unknown as { MEDIA_BUCKET?: R2BucketLike }).MEDIA_BUCKET;
-    if (!bucket) return '';
-    const obj = await bucket.get(m[1]);
+    const obj = await getMediaObject(m[1]);
     if (!obj) return '';
     const buf = await new Response(obj.body).arrayBuffer();
     const bytes = new Uint8Array(buf);
     let bin = '';
     const chunk = 0x8000;
     for (let i = 0; i < bytes.length; i += chunk) bin += String.fromCharCode(...bytes.subarray(i, i + chunk));
-    const ct = obj.httpMetadata?.contentType || 'image/jpeg';
+    const ct = obj.contentType || 'image/jpeg';
     return `data:${ct};base64,${btoa(bin)}`;
   } catch {
     return '';
   }
-}
-
-// 最小 R2 接口(避免依赖 @cloudflare/workers-types)
-interface R2BucketLike {
-  put(key: string, value: ArrayBuffer, opts?: { httpMetadata?: { contentType?: string } }): Promise<unknown>;
-  get(key: string): Promise<R2ObjectLike | null>;
-}
-export interface R2ObjectLike {
-  body: ReadableStream;
-  httpMetadata?: { contentType?: string };
 }

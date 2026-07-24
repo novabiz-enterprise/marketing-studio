@@ -6,8 +6,11 @@ NEXTAUTH_SECRET=        # openssl rand -base64 32
 NEXTAUTH_URL=           # https://<worker子域或自定义域>
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
-ATLASCLOUD_API_KEY=       # Atlas Cloud API key for image/audio/upload steps
-OPENROUTER_API_KEY=       # OpenRouter API key for text (qwen/qwen3.7-plus) and video (x-ai/grok-imagine-video)
-STRIPE_SECRET_KEY=      # 不用 Stripe 可留空 + PAYMENT_PROVIDER=atlas
+OPENROUTER_API_KEY=       # OpenRouter API key for text/image/video models
+R2_ACCOUNT_ID=            # Required on Vercel for durable media storage; Cloudflare Workers can use MEDIA_BUCKET binding instead
+R2_ACCESS_KEY_ID=
+R2_SECRET_ACCESS_KEY=
+R2_BUCKET_NAME=marketing-studio-media
+STRIPE_SECRET_KEY=      # 不用 Stripe 可留空 + PAYMENT_PROVIDER=redeem
 STRIPE_WEBHOOK_SECRET=
-PAYMENT_PROVIDER=atlas
+PAYMENT_PROVIDER=redeem

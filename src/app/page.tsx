@@ -9,7 +9,7 @@ import {
   DollarSign,
   Percent,
 } from 'lucide-react';
-import { appTitle, appDesc, isFeatured } from '@/config/appCatalog';
+import { appTitle, appDesc } from '@/config/appCatalog';
 
 type App = { id: string; href: string; icon: typeof Clapperboard; kind: string };
 
@@ -23,7 +23,6 @@ const APPS: App[] = [
 
 export default function Home() {
   const { t, appText, locale } = useI18n();
-  const appCount = APPS.length;
 
   const STATS = [
     { icon: Zap, value: '~$0.01-0.04', label: t('home.statCost') },
@@ -31,7 +30,8 @@ export default function Home() {
     { icon: Percent, value: '~95%', label: t('home.statMargin') },
   ];
 
-  const featured = APPS.filter((app) => isFeatured(app.href));
+  // Keep all flagship apps visible on the homepage, including Reference to Ad.
+  const featured = APPS;
 
   const gridBg = {
     backgroundColor: '#131416',

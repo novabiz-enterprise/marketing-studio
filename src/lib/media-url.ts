@@ -21,10 +21,20 @@ export function proxiedMediaUrl(url: string): string {
   return `/api/download?proxy=1&url=${encodeURIComponent(url)}`;
 }
 
-function isOpenRouterVideoContentUrl(url: string): boolean {
+export function isOpenRouterVideoContentUrl(url: string): boolean {
   try {
     const u = new URL(url);
     return /(^|\.)openrouter\.ai$/.test(u.hostname) && /^\/api\/v1\/videos\/[^/]+\/content$/.test(u.pathname);
+  } catch {
+    return false;
+  }
+}
+
+export function isTemporaryOpenRouterVideoUrl(url: string): boolean {
+  try {
+    const u = new URL(url, typeof window === 'undefined' ? 'http://localhost' : window.location.origin);
+    const proxied = u.searchParams.get('url');
+    return isOpenRouterVideoContentUrl(proxied || url);
   } catch {
     return false;
   }

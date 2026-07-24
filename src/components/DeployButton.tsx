@@ -5,8 +5,8 @@ import { Rocket, X } from 'lucide-react';
 import { useI18n } from '@/i18n/provider';
 
 const REPO = 'https://github.com/novabiz-enterprise/marketing-studio';
-const ENV_VARS = 'OPENROUTER_API_KEY,DATABASE_URL,DIRECT_URL,NEXTAUTH_SECRET,NEXTAUTH_URL,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,PAYMENT_PROVIDER';
-const ENV_DESC = 'OpenRouter API key, Neon database URLs, NextAuth secret, Google OAuth credentials, and payment provider (see .dev.vars.example)';
+const ENV_VARS = 'OPENROUTER_API_KEY,DATABASE_URL,DIRECT_URL,NEXTAUTH_SECRET,NEXTAUTH_URL,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,PAYMENT_PROVIDER,R2_ACCOUNT_ID,R2_ACCESS_KEY_ID,R2_SECRET_ACCESS_KEY,R2_BUCKET_NAME';
+const ENV_DESC = 'OpenRouter API key, Neon database URLs, NextAuth secret, Google OAuth credentials, payment provider, and Cloudflare R2 storage (see .dev.vars.example)';
 const ENV_LINK = `${REPO}/blob/main/.dev.vars.example`;
 
 const VERCEL_URL =

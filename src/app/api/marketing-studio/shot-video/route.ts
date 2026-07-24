@@ -29,6 +29,7 @@ async function __byokPOST(req: Request) {
   const ratio = normalizeVideoRatio(body.ratio);
   const resolution = normalizeVideoResolution(body.resolution);
   const duration = normalizeVideoDuration(body.duration);
+  const creationId = typeof body.creationId === 'string' && body.creationId ? body.creationId : undefined;
   if (!prompt) return NextResponse.json({ error: 'prompt_required' }, { status: 400 });
 
   // OpenRouter accepts HTTPS image URLs and data:image base64 references.
@@ -52,6 +53,7 @@ async function __byokPOST(req: Request) {
         templateId: 'mk-shot',
         model: SHOT_REF_VIDEO_MODEL,
         prompt,
+        creationId,
         submit: () => submitShotRefVideo(referenceImages, prompt, { ratio, resolution, duration }),
       });
       return NextResponse.json({ id: submit.id, getUrl: submit.getUrl });
@@ -69,6 +71,7 @@ async function __byokPOST(req: Request) {
       templateId: 'mk-shot',
       model,
       prompt,
+      creationId,
       submit: () => submitShotVideo(imageUrl, prompt, { ratio, resolution, duration, model }),
     });
     return NextResponse.json({ id: submit.id, getUrl: submit.getUrl });

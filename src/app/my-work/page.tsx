@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useSession, signIn } from 'next-auth/react';
 import { Download, Loader2, Clock, Play, X, Film } from 'lucide-react';
 import { useI18n } from '@/i18n/provider';
-import { mediaDownloadUrl } from '@/lib/media-url';
+import { isTemporaryOpenRouterVideoUrl, mediaDownloadUrl } from '@/lib/media-url';
 
 type DramaAssets = {
   kind: string;
@@ -146,6 +146,7 @@ export default function MyWorkPage() {
               const title = c.prompt || t('myWorkPage.untitled');
               const time = new Date(c.createdAt).toLocaleString();
               const url = mediaDownloadUrl(firstOutput(c));
+              const temporary = isTemporaryOpenRouterVideoUrl(url);
 
               // ★ drama 作品文件夹:点进独立详情页看 角色/各场景(首帧+视频)/成片。封面取首个定妆图→场景图→成片。
               if (c.assets && c.assets.kind === 'drama') {
@@ -240,6 +241,7 @@ export default function MyWorkPage() {
                       <div className="grid h-full w-full place-items-center text-4xl">{kind === 'audio' ? '♪' : '🎬'}</div>
                     )}
                     {badge && <span className="absolute left-2 top-2 rounded bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white/90">{badge}</span>}
+                    {temporary && <span className="absolute right-2 top-2 rounded bg-amber-500/20 px-2 py-0.5 text-[10px] font-semibold text-amber-200">{t('myWorkPage.temporary')}</span>}
                     <div className="absolute inset-0 grid place-items-center bg-black/20 opacity-0 transition group-hover:opacity-100">
                       <div className="grid h-12 w-12 place-items-center rounded-full bg-black/60"><Play className="h-5 w-5 text-white" /></div>
                     </div>
