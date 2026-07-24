@@ -14,7 +14,7 @@ export const SHOT_REF_VIDEO_MODEL = process.env.MK_SHOT_REF_VIDEO_MODEL || OPENR
 
 const RATIOS = new Set(['9:16', '16:9', '1:1', '4:3', '3:4']);
 const VIDEO_RATIOS = new Set(['9:16', '16:9', '1:1', '4:3', '3:4', '3:2', '2:3']);
-const VIDEO_RESOLUTIONS = new Set(['480p', '720p']);
+const VIDEO_RESOLUTIONS = new Set(['720p', '1080p']);
 const VIDEO_DURATIONS = new Set([-1, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
 
 export function normalizeRatio(v: unknown): string {

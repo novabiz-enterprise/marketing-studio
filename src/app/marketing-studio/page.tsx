@@ -22,8 +22,8 @@ const LIME = '#7036F0';
 const INK = '#131416'; // lime 底上的近黑字(与页面底色一致)
 const PANEL = '#1c1e21';
 const COSTS = { plan: 3, image: 5, video: 12 };
-// 视频模型:OpenRouter Grok Imagine Video,与后端 REPLICA_VIDEO_MODEL 白名单一致。
-const REPLICA_VIDEO_MODEL = 'x-ai/grok-imagine-video';
+// 视频模型:OpenRouter Wan 2.7,与后端 REPLICA_VIDEO_MODEL 白名单一致。
+const REPLICA_VIDEO_MODEL = 'alibaba/wan-2.7';
 
 async function postJson(url: string, body: unknown) {
   const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...byokHeaders() }, body: JSON.stringify(body) });
@@ -97,7 +97,7 @@ type Asset = { preview?: string; url?: string; uploading?: boolean };
 const CAT_LABEL: Record<string, string> = { all: 'All', ugc: 'UGC', commercial: 'Commercial', tiktok: 'TikTok' };
 const CAT_ICON: Record<string, string> = { tiktok: '🎵', ugc: '👤', commercial: '🎬' };
 const VIDEO_RATIOS = ['9:16', '16:9', '1:1', '4:3', '3:4'];
-const VIDEO_RESOLUTIONS = ['480p', '720p'];
+const VIDEO_RESOLUTIONS = ['720p', '1080p'];
 const VIDEO_DURATIONS = [4, 5, 6, 8, 10, 12, 15];
 // 自定义 chevron(白色半透明),让原生 select 呈现统一 pill 外观
 const CHEVRON = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-opacity='0.55' stroke-width='3'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")";
@@ -369,7 +369,7 @@ export default function MarketingStudioPage() {
         ratio: directPlan.ratio,
         resolution: videoResolution,
         duration: videoDuration,
-        model: REPLICA_VIDEO_MODEL, // 统一 Grok Imagine Video i2v(prompt 带台词 + generate_audio):复刻和手动扩写都能对口型出口播
+        model: REPLICA_VIDEO_MODEL, // 统一 Wan 2.7 i2v/reference-to-video(prompt 带台词 + generate_audio):复刻和手动扩写都能对口型出口播
       });
       local.vidGetUrl = vd.getUrl;
       setShots([{ ...local }]);

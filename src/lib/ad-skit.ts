@@ -2,11 +2,11 @@
  * 带货剧本大师 — 一个产品 → 双人搞笑创意带货短剧 (clean-room, 自研).
  *
  * 核心:OpenRouter LLM 当创意导演,写「两个角色 + 反转包袱」的
- * 15s 小剧场剧本,再用 OpenRouter Grok Imagine Video 拿产品图当参考直接出带音的片。
+ * 15s 小剧场剧本,再用 OpenRouter Wan 2.7 拿产品图当参考直接出带音的片。
  * 支持多语言(剧本+对白+字幕按所选语言),支持多种喜剧风格。
  *   ① plan   LLM 写双人创意剧本(3秒钩子→冲突→反转,产品有高光时刻)
  *   ② image  gpt-image-2 出产品图(上传则 edit 保产品,否则文生图)
- *   ③ video  x-ai/grok-imagine-video 参考产品图出 15s 片,generate_audio 自带对白/音效
+ *   ③ video  alibaba/wan-2.7 参考产品图出 15s 片,generate_audio 自带对白/音效
  *
  * 不额外配音,用视频模型自带音频;字幕烧所选语言 slogan。
  */
@@ -127,7 +127,7 @@ export async function planSkit(input: {
   }
 }
 
-/** OpenRouter Grok Imagine Video:多张产品图当参考出 15s 双人带货短剧(自带音)。 */
+/** OpenRouter Wan 2.7:多张产品图当参考出 15s 双人带货短剧(自带音)。 */
 export function submitSkitVideo(productUrls: string[], videoPrompt: string, duration = 15): Promise<SubmitResult> {
   return submitOpenRouterVideo({
     model: VIDEO_MODEL,

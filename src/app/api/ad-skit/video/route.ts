@@ -9,7 +9,7 @@ import { videoCredits } from '@/lib/video-pricing';
 
 export const maxDuration = 60;
 
-// Grok Imagine Video 固定 720p / 15s:按秒×分辨率动态计费(不再固定 AD_SKIT_COSTS.video)。
+// Wan 2.7 固定 720p / 15s:按秒×分辨率动态计费(不再固定 AD_SKIT_COSTS.video)。
 const AD_SKIT_VIDEO_COST = videoCredits(VIDEO_MODEL, '720p', 15);
 
 async function __byokPOST(req: Request) {

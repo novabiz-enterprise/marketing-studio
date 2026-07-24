@@ -2,7 +2,7 @@
 import { getRequestOpenRouterKey } from '@/lib/request-context';
 
 const OPENROUTER_BASE = (process.env.OPENROUTER_BASE || 'https://openrouter.ai/api/v1').replace(/\/+$/, '');
-export const OPENROUTER_VIDEO_MODEL = process.env.OPENROUTER_VIDEO_MODEL || 'x-ai/grok-imagine-video';
+export const OPENROUTER_VIDEO_MODEL = process.env.OPENROUTER_VIDEO_MODEL || 'alibaba/wan-2.7';
 const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
@@ -70,7 +70,7 @@ export interface SubmitResult {
 }
 
 const OPENROUTER_VIDEO_RATIOS = new Set(['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3']);
-const OPENROUTER_VIDEO_RESOLUTIONS = new Set(['480p', '720p']);
+const OPENROUTER_VIDEO_RESOLUTIONS = new Set(['480p', '720p', '1080p']);
 
 function openRouterVideoRatio(value: unknown): string {
   return typeof value === 'string' && OPENROUTER_VIDEO_RATIOS.has(value) ? value : '9:16';

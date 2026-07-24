@@ -12,6 +12,7 @@ const PER_SEC_USD: Record<string, Partial<Record<string, number>>> = {
   'bytedance/seedance-2.0/reference-to-video': { '480p': 0.112, '720p': 0.242, '1080p': 0.544, '4k': 1.24, '720p-SR': 0.202, '1080p-SR': 0.435, '1440p-SR': 0.774 },
   'bytedance/seedance-2.0/image-to-video':     { '480p': 0.112, '720p': 0.242, '1080p': 0.544, '4k': 1.24 },
   'bytedance/seedance-2.0-fast/reference-to-video': { '480p': 0.112, '720p': 0.242, '1080p': 0.544 },
+  'alibaba/wan-2.7':                           { '720p': 0.1, '1080p': 0.1 },
   'x-ai/grok-imagine-video':                    { '480p': 0.05, '720p': 0.05 },
   'google/gemini-omni-flash/video-edit':  { '*': 0.14 },   // 按参考视频秒数(3–30s)
   'kwaivgi/kling-v2.6-pro/motion-control': { '*': 0.112 }, // 按驱动视频秒数
