@@ -5,6 +5,8 @@ import { authOptions } from '@/lib/auth';
 import { DEFAULT_CHAT_MODEL, openRouterChat } from '@/lib/openrouter';
 import { mediaToDataUri } from '@/lib/marketing-studio/r2';
 import { getFormat } from '@/lib/marketing-studio/formats';
+import { getSetting } from '@/lib/marketing-studio/settings';
+import { buildAvatarPrompt, buildTargetCountryPrompt } from '@/lib/marketing-studio/targeting';
 
 export const maxDuration = 60;
 
@@ -34,10 +36,17 @@ async function __byokPOST(req: Request) {
   const fmtLine = fmt && fmt.id !== 'none'
     ? `AD FORMAT — this video uses the "${fmt.label}"${fmt.zh ? ` (${fmt.zh})` : ''} format. Follow this format's narrative & shot recipe exactly: ${fmt.hint} The presenter, pacing, framing and the spoken line must all fit this format.`
     : '';
+  const setting = getSetting(typeof body.settingId === 'string' ? body.settingId : 'none');
+  const contextLine = [
+    setting.recipe ? `SELECTED DECOR — set the ad in this exact environment: ${setting.recipe}.` : '',
+    buildTargetCountryPrompt(typeof body.targetCountry === 'string' ? body.targetCountry : 'auto'),
+    buildAvatarPrompt(typeof body.avatarSex === 'string' ? body.avatarSex : 'auto', typeof body.avatarAge === 'string' ? body.avatarAge : 'auto'),
+  ].filter(Boolean).join('\n');
   const sys = [
     'You are an expert UGC video-ad prompt writer for an image-to-video model.',
-    'CRITICAL LANGUAGE RULE: detect the language of the user brief. If the brief is in Chinese, write the ENTIRE prompt — every sentence of scene description AND the spoken dialogue — in natural Chinese. If the brief is in English, write everything in English. Never output English when the brief is Chinese.',
+    'CRITICAL LANGUAGE RULE: if a target country is provided below, use that country\'s natural ad language unless the user brief explicitly asks for another language. If no target country is provided, detect the language of the user brief. If the brief is in Chinese, write the ENTIRE prompt — every sentence of scene description AND the spoken dialogue — in natural Chinese. If the brief is in English, write everything in English. Never output English when the brief is Chinese unless the user explicitly asks for English.',
     fmtLine,
+    contextLine ? `USER SELECTED CONTEXT — obey these constraints and bake them naturally into the final prompt:\n${contextLine}` : '',
     'You may be given ONE OR MORE PRODUCT images and a PRESENTER image. LOOK CAREFULLY at every image and identify what the product ACTUALLY is (e.g. skincare serum, coffee tumbler, wireless earbuds). If several product images are given, they may be the same product from different angles or several products featured in the ad — reference ALL of them and keep each pixel-identical to its image. The expanded prompt MUST match the real product(s) in the images — their exact category, material, size, and the realistic way each is shown/used/demonstrated. Do NOT invent a different product.',
     'START the prompt by concretely describing the product itself — its color, material, shape/size and any visible label or logo — so the product is unmistakable on screen; THEN describe the presenter, scene and how they use it. Do not skip the product description.',
     'Write ONE vivid, COMPLETE, self-contained shooting prompt (about 150-220 words) for a vertical 9:16 video. Cover in order: the product; the presenter and scene/lighting; front-camera selfie style with slight natural hand movement and casual real framing; how the presenter shows/uses THIS specific product. You MUST END with a natural spoken line of dialogue in double quotes said straight to camera. Never cut off mid-sentence and never omit the dialogue.',

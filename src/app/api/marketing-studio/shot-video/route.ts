@@ -15,6 +15,8 @@ import {
 } from '@/lib/marketing-studio/workflow';
 import { chargeAndSubmit, chargeErrorResponse } from '@/lib/marketing-studio/gen-task';
 import { videoCredits } from '@/lib/video-pricing';
+import { getSetting } from '@/lib/marketing-studio/settings';
+import { buildAvatarPrompt, buildTargetCountryPrompt } from '@/lib/marketing-studio/targeting';
 
 export const maxDuration = 60;
 
@@ -25,12 +27,24 @@ async function __byokPOST(req: Request) {
   const uid = session.user.id;
 
   const body = await req.json().catch(() => ({}));
-  const prompt = cleanText(body.prompt, '', 3000);
+  const basePrompt = cleanText(body.prompt, '', 2400);
   const ratio = normalizeVideoRatio(body.ratio);
   const resolution = normalizeVideoResolution(body.resolution);
   const duration = normalizeVideoDuration(body.duration);
   const creationId = typeof body.creationId === 'string' && body.creationId ? body.creationId : undefined;
-  if (!prompt) return NextResponse.json({ error: 'prompt_required' }, { status: 400 });
+  if (!basePrompt) return NextResponse.json({ error: 'prompt_required' }, { status: 400 });
+
+  const setting = getSetting(cleanText(body.settingId, 'none', 80));
+  const prompt = [
+    basePrompt,
+    setting.recipe ? `SETTING / DECOR: The whole video is set in ${setting.recipe}. Keep this environment consistent and visually recognizable.` : '',
+    buildTargetCountryPrompt(cleanText(body.targetCountry, 'auto', 80)),
+    buildAvatarPrompt(cleanText(body.avatarSex, 'auto', 40), cleanText(body.avatarAge, 'auto', 40)),
+    'No subtitles, no captions, no on-screen text or watermark.',
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .slice(0, 3000);
 
   // OpenRouter accepts HTTPS image URLs and data:image base64 references.
   const toAbs = (u: unknown): string => {

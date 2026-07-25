@@ -13,10 +13,9 @@ import { appTitle, appDesc } from '@/config/appCatalog';
 
 type App = { id: string; href: string; icon: typeof Clapperboard; kind: string };
 
-// 精简后首页只保留 4 个精品应用(其余应用页面已删)。
+// 首页只展示当前可对外主推的精品应用。
 const APPS: App[] = [
   { id: 'marketing-studio', href: '/marketing-studio', icon: Clapperboard, kind: 'pipeline' },
-  { id: 'ad-reference', href: '/ad-reference', icon: Clapperboard, kind: 'pipeline' },
   { id: 'drama-studio', href: '/drama-studio', icon: Clapperboard, kind: 'pipeline' },
   { id: 'ad-skit', href: '/ad-skit', icon: Clapperboard, kind: 'pipeline' },
 ];
@@ -30,7 +29,6 @@ export default function Home() {
     { icon: Percent, value: '~95%', label: t('home.statMargin') },
   ];
 
-  // Keep all flagship apps visible on the homepage, including Reference to Ad.
   const featured = APPS;
 
   const gridBg = {

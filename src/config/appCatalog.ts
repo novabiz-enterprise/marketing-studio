@@ -1,16 +1,15 @@
 // App 状态分类(依据《功能审查.md》),供 AppSidebar 与首页共用,保证一致。
 export type AppCat = 'production' | 'nocreative' | 'incomplete';
 
-// ✅ 可投入生产:有真实壁垒 / 多步 pipeline。精简后仓库只保留 4 个精品应用。
+// ✅ 可投入生产:有真实壁垒 / 多步 pipeline。
 export const PRODUCTION_ROUTES = new Set<string>([
-  '/marketing-studio', '/ad-reference', '/drama-studio', '/ad-skit',
+  '/marketing-studio', '/drama-studio', '/ad-skit',
 ]);
 
 // ⭐ 精品:重点打磨、可对外主推的旗舰应用
-// 精简首发:首页只主推这 4 个打磨完善的应用(产品口播广告 / 爆款广告复刻 / AI 短剧广告 / 搞笑带货小剧场)。
-// 命名注:Reference to Ad 与 AI Drama Ad 两个名字是 Lark 需求文档定的,不要改;另两个按实际功能命名。
+// 首页只主推当前模型能力可稳定支撑的应用。
 // 其余应用页面仍在,只是不在首页精品区展示。
-export const FEATURED_ROUTES = new Set<string>(['/marketing-studio', '/ad-reference', '/drama-studio', '/ad-skit']);
+export const FEATURED_ROUTES = new Set<string>(['/marketing-studio', '/drama-studio', '/ad-skit']);
 export function isFeatured(href: string): boolean {
   return FEATURED_ROUTES.has(href);
 }
@@ -29,7 +28,7 @@ export const CAT_META: { key: AppCat; label: string; desc: string; dot: string; 
   { key: 'incomplete', label: '🔴 未完善', desc: '空壳 / 只出文案 / 名不副实', dot: 'bg-red-500', ring: 'ring-red-300' },
 ];
 
-// 4 个精品应用的自定义标题/描述(部分无 i18n key,单独给)
+// 精品应用的自定义标题/描述(部分无 i18n key,单独给)
 type LocalText = { en: string; zh: string; fr?: string };
 const CUSTOM_TITLES: Record<string, LocalText> = {
   'marketing-studio': { en: 'UGC Product Ad', zh: '产品口播广告', fr: 'Pub produit UGC' },

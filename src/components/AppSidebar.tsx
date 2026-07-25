@@ -12,10 +12,9 @@ import { CAT_META, catOf, appTitle, appDesc, isFeatured, type AppCat } from '@/c
 
 type NavApp = { href: string; id: string; icon: typeof Clapperboard };
 
-// 精简后侧栏只保留 4 个精品应用。
+// 侧栏只保留当前可对外主推的精品应用。
 const PRIMARY_APPS: NavApp[] = [
   { href: '/marketing-studio', id: 'marketing-studio', icon: Clapperboard },
-  { href: '/ad-reference', id: 'ad-reference', icon: Clapperboard },
   { href: '/drama-studio', id: 'drama-studio', icon: Clapperboard },
   { href: '/ad-skit', id: 'ad-skit', icon: Clapperboard },
 ];

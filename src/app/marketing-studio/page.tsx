@@ -10,6 +10,7 @@ import { AD_FORMATS, AD_CATEGORIES, type AdCategory } from '@/lib/marketing-stud
 import { AD_HOOKS, getHook } from '@/lib/marketing-studio/hooks';
 import { AD_SETTINGS, getSetting } from '@/lib/marketing-studio/settings';
 import { EXAMPLE_VIDEOS, EXAMPLE_RECIPES } from '@/lib/marketing-studio/examples';
+import { TARGET_COUNTRIES, AVATAR_SEXES, AVATAR_AGES } from '@/lib/marketing-studio/targeting';
 import type { MarketingPlan } from '@/lib/marketing-studio/schema';
 import { videoCredits } from '@/lib/video-pricing';
 import { useI18n } from '@/i18n/provider';
@@ -147,6 +148,9 @@ export default function MarketingStudioPage() {
   const [product, setProduct] = useState('');
   const [hookId, setHookId] = useState('none');
   const [settingId, setSettingId] = useState('none');
+  const [targetCountry, setTargetCountry] = useState('auto');
+  const [avatarSex, setAvatarSex] = useState('auto');
+  const [avatarAge, setAvatarAge] = useState('auto');
   const [lang, setLang] = useState('英文');
   const [videoRatio, setVideoRatio] = useState('9:16');
   const [videoResolution, setVideoResolution] = useState('720p');
@@ -216,6 +220,9 @@ export default function MarketingStudioPage() {
       if (typeof s.formatId === 'string' && s.formatId) setFormatId(s.formatId);
       if (typeof s.hookId === 'string' && s.hookId) setHookId(s.hookId);
       if (typeof s.settingId === 'string' && s.settingId) setSettingId(s.settingId);
+      if (typeof s.targetCountry === 'string' && TARGET_COUNTRIES.some((c) => c.id === s.targetCountry)) setTargetCountry(s.targetCountry);
+      if (typeof s.avatarSex === 'string' && AVATAR_SEXES.some((sex) => sex.id === s.avatarSex)) setAvatarSex(s.avatarSex);
+      if (typeof s.avatarAge === 'string' && AVATAR_AGES.some((age) => age.id === s.avatarAge)) setAvatarAge(s.avatarAge);
       if (s.replica && typeof s.replica.imgPrompt === 'string') setReplica(s.replica);
       // 图只存了 url(R2/同源,可恢复);blob preview 重载即失效,用 url 兜底
       const purls: string[] = Array.isArray(s.productUrls) ? s.productUrls.filter(Boolean) : (s.productUrl ? [s.productUrl] : []);
@@ -246,13 +253,13 @@ export default function MarketingStudioPage() {
     if (!mounted) return; // 不再要求有 plan:只填了输入(还没生成)也存,登录 OAuth 跳转回来才不丢
     try {
       localStorage.setItem(MK_SESSION_KEY, JSON.stringify({
-        plan, shots, product, formatId, hookId, settingId, replica,
+        plan, shots, product, formatId, hookId, settingId, targetCountry, avatarSex, avatarAge, replica,
         videoRatio, videoResolution, videoDuration, creationId,
         productUrls: productAssets.map((a) => a.url).filter((u): u is string => !!u && !u.startsWith('data:')),
         ts: Date.now(),
       }));
     } catch { /* storage full etc. */ }
-  }, [mounted, plan, shots, product, formatId, hookId, settingId, replica, videoRatio, videoResolution, videoDuration, creationId, productAssets]);
+  }, [mounted, plan, shots, product, formatId, hookId, settingId, targetCountry, avatarSex, avatarAge, replica, videoRatio, videoResolution, videoDuration, creationId, productAssets]);
 
   async function onPick(file?: File | null) {
     if (!file) return;
@@ -299,7 +306,15 @@ export default function MarketingStudioPage() {
     if (!brief) { setErr(t('marketingStudio.errors.expandFirst')); return; }
     setExpanding(true); setErr(null);
     try {
-      const r = await postJson('/api/marketing-studio/expand-prompt', { brief, formatId, productUrls: productAssets.map((a) => a.url).filter(Boolean) });
+      const r = await postJson('/api/marketing-studio/expand-prompt', {
+        brief,
+        formatId,
+        settingId,
+        targetCountry,
+        avatarSex,
+        avatarAge,
+        productUrls: productAssets.map((a) => a.url).filter(Boolean),
+      });
       if (r.prompt) { setProduct(r.prompt); setReplica(null); } // 扩写结果=手动详细脚本(非复刻),出图也用它
     } catch (e) {
       setErr(String((e as Error).message || e));
@@ -312,10 +327,9 @@ export default function MarketingStudioPage() {
     if (status !== 'authenticated') { signIn('google'); return; }
     if (!product.trim() && !productAssets.some((a) => a.url)) { setErr('product_required'); return; }
     if (productAssets.some((a) => a.uploading)) return;
-    // 场景/钩子下拉 → 注入 prompt 占位(both 复刻/普通模式生效):场景进画面(出图+视频),钩子进视频开场
+    // 场景/国家/人物约束交给后端统一拼入 provider prompt;前端只保留开场钩子,避免重复注入。
     const settingRecipe = getSetting(settingId).recipe; // 英文场景描述(空=智能自选)
     const hookEn = getHook(hookId).promptEn || ''; // 英文开场钩子指令
-    const sceneAdd = settingRecipe ? ` The whole scene is set in ${settingRecipe}.` : '';
     const hookAdd = hookEn ? ` Opening hook in the first 3 seconds: ${hookEn}.` : '';
     const directPlan = buildDirectMarketingPlan({ prompt: product.trim() || '产品视频', ratio: videoRatio, formatId, scene: settingRecipe || undefined });
     const local: ShotState = { img: 'idle', vid: 'idle' };
@@ -353,7 +367,11 @@ export default function MarketingStudioPage() {
       const vd = await postJson('/api/marketing-studio/shot-video', {
         referenceImages,
         allowTextToVideo: referenceImages.length === 0,
-        prompt: product.trim() + sceneAdd + hookAdd + ' No subtitles, no captions, no on-screen text or watermark.', // 视频 prompt = 文本框内容 + 场景 + 钩子;明确禁字幕
+        prompt: `${product.trim() || 'Create a realistic product advertisement using the uploaded product reference.'}${hookAdd}`.trim(),
+        settingId,
+        targetCountry,
+        avatarSex,
+        avatarAge,
         ratio: directPlan.ratio,
         resolution: videoResolution,
         duration: videoDuration,
@@ -405,7 +423,10 @@ export default function MarketingStudioPage() {
   const formatLabel = (f: (typeof AD_FORMATS)[number]) => (locale === 'fr' ? t(`marketingStudio.formatLabels.${f.id}`) : locale === 'zh' ? (f.zh ?? f.label) : f.label);
   const formatDesc = (f: (typeof AD_FORMATS)[number]) => (locale === 'fr' ? t(`marketingStudio.formatDescs.${f.id}`) : locale === 'zh' ? (f.descZh ?? f.desc) : f.desc);
   const hookLabel = (h: (typeof AD_HOOKS)[number]) => (locale === 'fr' ? t(`marketingStudio.hookLabels.${h.id}`) : locale === 'zh' ? (h.zh ?? h.label) : h.label);
-  const settingLabel = (s: (typeof AD_SETTINGS)[number]) => (locale === 'fr' ? t(`marketingStudio.settingLabels.${s.id}`) : locale === 'zh' ? (s.zh ?? s.label) : s.label);
+  const settingLabel = (s: (typeof AD_SETTINGS)[number]) => t(`marketingStudio.settingLabels.${s.id}`);
+  const targetCountryLabel = (id: string) => t(`marketingStudio.targetCountries.${id}`);
+  const avatarSexLabel = (id: string) => t(`marketingStudio.avatarSexes.${id}`);
+  const avatarAgeLabel = (id: string) => t(`marketingStudio.avatarAges.${id}`);
 
   // 单张已上传缩略图(带删除);产品图可多张。
   const ThumbSlot = ({ asset, onRemove, label }: { asset: Asset; onRemove: () => void; label: string }) => (
@@ -472,6 +493,9 @@ export default function MarketingStudioPage() {
                 </select>
                 {!replica && <select value={hookId} onChange={(e) => setHookId(e.target.value)} className={selCls} style={selStyle} title={t('marketingStudio.hookTitle')}>{AD_HOOKS.map((h) => <option key={h.id} value={h.id}>{h.id === 'none' ? t('marketingStudio.hookOptional') : hookLabel(h)}</option>)}</select>}
                 {!replica && <select value={settingId} onChange={(e) => setSettingId(e.target.value)} className={selCls} style={selStyle} title={t('marketingStudio.settingTitle')}>{AD_SETTINGS.map((s) => <option key={s.id} value={s.id}>{s.id === 'none' ? t('marketingStudio.settingOptional') : settingLabel(s)}</option>)}</select>}
+                <select value={targetCountry} onChange={(e) => setTargetCountry(e.target.value)} className={selCls} style={selStyle} title={t('marketingStudio.targetCountryTitle')}>{TARGET_COUNTRIES.map((country) => <option key={country.id} value={country.id}>{country.id === 'auto' ? t('marketingStudio.targetCountryOptional') : targetCountryLabel(country.id)}</option>)}</select>
+                <select value={avatarSex} onChange={(e) => setAvatarSex(e.target.value)} className={selCls} style={selStyle} title={t('marketingStudio.avatarSexTitle')}>{AVATAR_SEXES.map((sex) => <option key={sex.id} value={sex.id}>{sex.id === 'auto' ? t('marketingStudio.avatarSexOptional') : avatarSexLabel(sex.id)}</option>)}</select>
+                <select value={avatarAge} onChange={(e) => setAvatarAge(e.target.value)} className={selCls} style={selStyle} title={t('marketingStudio.avatarAgeTitle')}>{AVATAR_AGES.map((age) => <option key={age.id} value={age.id}>{age.id === 'auto' ? t('marketingStudio.avatarAgeOptional') : avatarAgeLabel(age.id)}</option>)}</select>
                 <select value={videoRatio} onChange={(e) => setVideoRatio(e.target.value)} className={selCls} style={selStyle} title={t('marketingStudio.aspectRatio')}>{VIDEO_RATIOS.map((r) => <option key={r} value={r}>{r}</option>)}</select>
                 <select value={videoResolution} onChange={(e) => setVideoResolution(e.target.value)} className={selCls} style={selStyle} title={t('marketingStudio.resolution')}>{VIDEO_RESOLUTIONS.map((r) => <option key={r} value={r}>{r}</option>)}</select>
                 <select value={videoDuration} onChange={(e) => setVideoDuration(Number(e.target.value))} className={selCls} style={selStyle} title={t('marketingStudio.duration')}>{VIDEO_DURATIONS.map((d) => <option key={d} value={d}>{d}s</option>)}</select>
