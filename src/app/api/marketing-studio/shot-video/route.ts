@@ -16,7 +16,7 @@ import {
 import { chargeAndSubmit, chargeErrorResponse } from '@/lib/marketing-studio/gen-task';
 import { videoCredits } from '@/lib/video-pricing';
 import { getSetting } from '@/lib/marketing-studio/settings';
-import { buildAvatarPrompt, buildTargetCountryPrompt } from '@/lib/marketing-studio/targeting';
+import { buildAvatarPrompt, buildContactPrompt, buildTargetCountryPrompt } from '@/lib/marketing-studio/targeting';
 
 export const maxDuration = 60;
 
@@ -35,12 +35,19 @@ async function __byokPOST(req: Request) {
   if (!basePrompt) return NextResponse.json({ error: 'prompt_required' }, { status: 400 });
 
   const setting = getSetting(cleanText(body.settingId, 'none', 80));
+  const contactPrompt = buildContactPrompt({
+    phoneNumber: cleanText(body.phoneNumber, '', 80),
+    websiteUrl: cleanText(body.websiteUrl, '', 140),
+  });
   const prompt = [
     basePrompt,
     setting.recipe ? `SETTING / DECOR: The whole video is set in ${setting.recipe}. Keep this environment consistent and visually recognizable.` : '',
     buildTargetCountryPrompt(cleanText(body.targetCountry, 'auto', 80)),
     buildAvatarPrompt(cleanText(body.avatarSex, 'auto', 40), cleanText(body.avatarAge, 'auto', 40)),
-    'No subtitles, no captions, no on-screen text or watermark.',
+    contactPrompt,
+    contactPrompt
+      ? 'No subtitles, no captions and no watermark. Do not add any on-screen text except the exact provided contact details when used as a clean CTA or end card.'
+      : 'No subtitles, no captions, no on-screen text or watermark.',
   ]
     .filter(Boolean)
     .join(' ')

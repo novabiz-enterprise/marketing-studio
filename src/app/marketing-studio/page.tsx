@@ -10,7 +10,7 @@ import { AD_FORMATS, AD_CATEGORIES, type AdCategory } from '@/lib/marketing-stud
 import { AD_HOOKS, getHook } from '@/lib/marketing-studio/hooks';
 import { AD_SETTINGS, getSetting } from '@/lib/marketing-studio/settings';
 import { EXAMPLE_VIDEOS, EXAMPLE_RECIPES } from '@/lib/marketing-studio/examples';
-import { TARGET_COUNTRIES, AVATAR_SEXES, AVATAR_AGES } from '@/lib/marketing-studio/targeting';
+import { TARGET_COUNTRIES, AVATAR_SEXES, AVATAR_AGES, type TargetCountry } from '@/lib/marketing-studio/targeting';
 import type { MarketingPlan } from '@/lib/marketing-studio/schema';
 import { videoCredits } from '@/lib/video-pricing';
 import { useI18n } from '@/i18n/provider';
@@ -103,6 +103,10 @@ const VIDEO_DURATIONS = [4, 5, 6, 8, 10, 12, 15];
 const CHEVRON = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-opacity='0.55' stroke-width='3'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")";
 const selStyle: React.CSSProperties = { backgroundImage: CHEVRON, backgroundPosition: 'right 8px center', backgroundSize: '10px', backgroundRepeat: 'no-repeat' };
 
+function normalizeCountrySearch(value: string): string {
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
 function buildDirectMarketingPlan(input: { prompt: string; ratio: string; formatId: string; scene?: string }): MarketingPlan {
   const prompt = input.prompt.trim() || '产品视频';
   // 选了场景则用它(→plan.scene→后端 buildShotImageEditPrompt 的 Scene:),否则退回无人产品场景默认
@@ -149,8 +153,11 @@ export default function MarketingStudioPage() {
   const [hookId, setHookId] = useState('none');
   const [settingId, setSettingId] = useState('none');
   const [targetCountry, setTargetCountry] = useState('auto');
+  const [countrySearch, setCountrySearch] = useState('');
   const [avatarSex, setAvatarSex] = useState('auto');
   const [avatarAge, setAvatarAge] = useState('auto');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [websiteUrl, setWebsiteUrl] = useState('');
   const [lang, setLang] = useState('英文');
   const [videoRatio, setVideoRatio] = useState('9:16');
   const [videoResolution, setVideoResolution] = useState('720p');
@@ -223,6 +230,8 @@ export default function MarketingStudioPage() {
       if (typeof s.targetCountry === 'string' && TARGET_COUNTRIES.some((c) => c.id === s.targetCountry)) setTargetCountry(s.targetCountry);
       if (typeof s.avatarSex === 'string' && AVATAR_SEXES.some((sex) => sex.id === s.avatarSex)) setAvatarSex(s.avatarSex);
       if (typeof s.avatarAge === 'string' && AVATAR_AGES.some((age) => age.id === s.avatarAge)) setAvatarAge(s.avatarAge);
+      if (typeof s.phoneNumber === 'string') setPhoneNumber(s.phoneNumber);
+      if (typeof s.websiteUrl === 'string') setWebsiteUrl(s.websiteUrl);
       if (s.replica && typeof s.replica.imgPrompt === 'string') setReplica(s.replica);
       // 图只存了 url(R2/同源,可恢复);blob preview 重载即失效,用 url 兜底
       const purls: string[] = Array.isArray(s.productUrls) ? s.productUrls.filter(Boolean) : (s.productUrl ? [s.productUrl] : []);
@@ -253,13 +262,13 @@ export default function MarketingStudioPage() {
     if (!mounted) return; // 不再要求有 plan:只填了输入(还没生成)也存,登录 OAuth 跳转回来才不丢
     try {
       localStorage.setItem(MK_SESSION_KEY, JSON.stringify({
-        plan, shots, product, formatId, hookId, settingId, targetCountry, avatarSex, avatarAge, replica,
+        plan, shots, product, formatId, hookId, settingId, targetCountry, avatarSex, avatarAge, phoneNumber, websiteUrl, replica,
         videoRatio, videoResolution, videoDuration, creationId,
         productUrls: productAssets.map((a) => a.url).filter((u): u is string => !!u && !u.startsWith('data:')),
         ts: Date.now(),
       }));
     } catch { /* storage full etc. */ }
-  }, [mounted, plan, shots, product, formatId, hookId, settingId, targetCountry, avatarSex, avatarAge, replica, videoRatio, videoResolution, videoDuration, creationId, productAssets]);
+  }, [mounted, plan, shots, product, formatId, hookId, settingId, targetCountry, avatarSex, avatarAge, phoneNumber, websiteUrl, replica, videoRatio, videoResolution, videoDuration, creationId, productAssets]);
 
   async function onPick(file?: File | null) {
     if (!file) return;
@@ -313,6 +322,8 @@ export default function MarketingStudioPage() {
         targetCountry,
         avatarSex,
         avatarAge,
+        phoneNumber,
+        websiteUrl,
         productUrls: productAssets.map((a) => a.url).filter(Boolean),
       });
       if (r.prompt) { setProduct(r.prompt); setReplica(null); } // 扩写结果=手动详细脚本(非复刻),出图也用它
@@ -372,6 +383,8 @@ export default function MarketingStudioPage() {
         targetCountry,
         avatarSex,
         avatarAge,
+        phoneNumber,
+        websiteUrl,
         ratio: directPlan.ratio,
         resolution: videoResolution,
         duration: videoDuration,
@@ -420,11 +433,33 @@ export default function MarketingStudioPage() {
     backgroundSize: 'auto, 44px 44px, 44px 44px',
   } as React.CSSProperties;
   const selCls = 'dark-select appearance-none bg-white/[0.04] rounded-lg pl-2.5 pr-7 py-2 text-xs text-white/90 focus:outline-none focus:ring-1 focus:ring-[#7036F0]';
+  const inputCls = 'bg-white/[0.04] rounded-lg px-2.5 py-2 text-xs text-white/90 placeholder:text-white/35 focus:outline-none focus:ring-1 focus:ring-[#7036F0]';
   const formatLabel = (f: (typeof AD_FORMATS)[number]) => (locale === 'fr' ? t(`marketingStudio.formatLabels.${f.id}`) : locale === 'zh' ? (f.zh ?? f.label) : f.label);
   const formatDesc = (f: (typeof AD_FORMATS)[number]) => (locale === 'fr' ? t(`marketingStudio.formatDescs.${f.id}`) : locale === 'zh' ? (f.descZh ?? f.desc) : f.desc);
   const hookLabel = (h: (typeof AD_HOOKS)[number]) => (locale === 'fr' ? t(`marketingStudio.hookLabels.${h.id}`) : locale === 'zh' ? (h.zh ?? h.label) : h.label);
   const settingLabel = (s: (typeof AD_SETTINGS)[number]) => t(`marketingStudio.settingLabels.${s.id}`);
-  const targetCountryLabel = (id: string) => t(`marketingStudio.targetCountries.${id}`);
+  const targetCountryLabel = useCallback((country: TargetCountry) => {
+    if (country.id === 'auto') return t('marketingStudio.targetCountryOptional');
+    const key = `marketingStudio.targetCountries.${country.id}`;
+    const translated = t(key);
+    return translated === key ? country.en : translated;
+  }, [t]);
+  const countryOptions = useMemo(() => TARGET_COUNTRIES
+    .map((country) => ({ country, label: targetCountryLabel(country) }))
+    .sort((a, b) => {
+      if (a.country.id === 'auto') return -1;
+      if (b.country.id === 'auto') return 1;
+      return a.label.localeCompare(b.label, locale, { sensitivity: 'base' });
+    }), [locale, targetCountryLabel]);
+  const selectedCountryLabel = countryOptions.find((option) => option.country.id === targetCountry)?.label || countryOptions[0]?.label || '';
+  const findCountryOption = useCallback((value: string) => {
+    const normalized = normalizeCountrySearch(value);
+    if (!normalized) return countryOptions.find((option) => option.country.id === 'auto');
+    return countryOptions.find((option) => normalizeCountrySearch(option.label) === normalized || normalizeCountrySearch(option.country.en) === normalized || option.country.id === normalized.replace(/ /g, '-'));
+  }, [countryOptions]);
+  useEffect(() => {
+    setCountrySearch(selectedCountryLabel);
+  }, [selectedCountryLabel]);
   const avatarSexLabel = (id: string) => t(`marketingStudio.avatarSexes.${id}`);
   const avatarAgeLabel = (id: string) => t(`marketingStudio.avatarAges.${id}`);
 
@@ -493,13 +528,61 @@ export default function MarketingStudioPage() {
                 </select>
                 {!replica && <select value={hookId} onChange={(e) => setHookId(e.target.value)} className={selCls} style={selStyle} title={t('marketingStudio.hookTitle')}>{AD_HOOKS.map((h) => <option key={h.id} value={h.id}>{h.id === 'none' ? t('marketingStudio.hookOptional') : hookLabel(h)}</option>)}</select>}
                 {!replica && <select value={settingId} onChange={(e) => setSettingId(e.target.value)} className={selCls} style={selStyle} title={t('marketingStudio.settingTitle')}>{AD_SETTINGS.map((s) => <option key={s.id} value={s.id}>{s.id === 'none' ? t('marketingStudio.settingOptional') : settingLabel(s)}</option>)}</select>}
-                <select value={targetCountry} onChange={(e) => setTargetCountry(e.target.value)} className={selCls} style={selStyle} title={t('marketingStudio.targetCountryTitle')}>{TARGET_COUNTRIES.map((country) => <option key={country.id} value={country.id}>{country.id === 'auto' ? t('marketingStudio.targetCountryOptional') : targetCountryLabel(country.id)}</option>)}</select>
+                <input
+                  value={countrySearch}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setCountrySearch(value);
+                    const option = findCountryOption(value);
+                    if (option) setTargetCountry(option.country.id);
+                  }}
+                  onBlur={() => {
+                    const option = findCountryOption(countrySearch);
+                    if (option) {
+                      setTargetCountry(option.country.id);
+                      setCountrySearch(option.label);
+                    } else {
+                      setCountrySearch(selectedCountryLabel);
+                    }
+                  }}
+                  list="marketing-studio-country-options"
+                  className={`${inputCls} w-48`}
+                  title={t('marketingStudio.targetCountryTitle')}
+                  aria-label={t('marketingStudio.targetCountryTitle')}
+                  placeholder={t('marketingStudio.countrySearchPlaceholder')}
+                  autoComplete="off"
+                />
+                <datalist id="marketing-studio-country-options">
+                  {countryOptions.map((option) => <option key={option.country.id} value={option.label} />)}
+                </datalist>
                 <select value={avatarSex} onChange={(e) => setAvatarSex(e.target.value)} className={selCls} style={selStyle} title={t('marketingStudio.avatarSexTitle')}>{AVATAR_SEXES.map((sex) => <option key={sex.id} value={sex.id}>{sex.id === 'auto' ? t('marketingStudio.avatarSexOptional') : avatarSexLabel(sex.id)}</option>)}</select>
                 <select value={avatarAge} onChange={(e) => setAvatarAge(e.target.value)} className={selCls} style={selStyle} title={t('marketingStudio.avatarAgeTitle')}>{AVATAR_AGES.map((age) => <option key={age.id} value={age.id}>{age.id === 'auto' ? t('marketingStudio.avatarAgeOptional') : avatarAgeLabel(age.id)}</option>)}</select>
                 <select value={videoRatio} onChange={(e) => setVideoRatio(e.target.value)} className={selCls} style={selStyle} title={t('marketingStudio.aspectRatio')}>{VIDEO_RATIOS.map((r) => <option key={r} value={r}>{r}</option>)}</select>
                 <select value={videoResolution} onChange={(e) => setVideoResolution(e.target.value)} className={selCls} style={selStyle} title={t('marketingStudio.resolution')}>{VIDEO_RESOLUTIONS.map((r) => <option key={r} value={r}>{r}</option>)}</select>
                 <select value={videoDuration} onChange={(e) => setVideoDuration(Number(e.target.value))} className={selCls} style={selStyle} title={t('marketingStudio.duration')}>{VIDEO_DURATIONS.map((d) => <option key={d} value={d}>{d}s</option>)}</select>
                 {/* 语言下拉已移除:台词语言自动跟随文本框里输入的语言(中文输入→中文台词) */}
+              </div>
+              <div className="flex items-center gap-2 flex-wrap mt-2">
+                <input
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                  className={`${inputCls} min-w-[150px] flex-1 sm:flex-none`}
+                  title={t('marketingStudio.phoneTitle')}
+                  aria-label={t('marketingStudio.phoneTitle')}
+                  placeholder={t('marketingStudio.phonePlaceholder')}
+                  inputMode="tel"
+                  maxLength={80}
+                />
+                <input
+                  value={websiteUrl}
+                  onChange={(e) => setWebsiteUrl(e.target.value)}
+                  className={`${inputCls} min-w-[170px] flex-1 sm:flex-none`}
+                  title={t('marketingStudio.websiteTitle')}
+                  aria-label={t('marketingStudio.websiteTitle')}
+                  placeholder={t('marketingStudio.websitePlaceholder')}
+                  inputMode="url"
+                  maxLength={140}
+                />
               </div>
             </div>
             {/* GENERATE(通高) */}

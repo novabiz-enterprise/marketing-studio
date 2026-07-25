@@ -6,7 +6,7 @@ import { DEFAULT_CHAT_MODEL, openRouterChat } from '@/lib/openrouter';
 import { mediaToDataUri } from '@/lib/marketing-studio/r2';
 import { getFormat } from '@/lib/marketing-studio/formats';
 import { getSetting } from '@/lib/marketing-studio/settings';
-import { buildAvatarPrompt, buildTargetCountryPrompt } from '@/lib/marketing-studio/targeting';
+import { buildAvatarPrompt, buildContactPrompt, buildTargetCountryPrompt } from '@/lib/marketing-studio/targeting';
 
 export const maxDuration = 60;
 
@@ -41,6 +41,10 @@ async function __byokPOST(req: Request) {
     setting.recipe ? `SELECTED DECOR — set the ad in this exact environment: ${setting.recipe}.` : '',
     buildTargetCountryPrompt(typeof body.targetCountry === 'string' ? body.targetCountry : 'auto'),
     buildAvatarPrompt(typeof body.avatarSex === 'string' ? body.avatarSex : 'auto', typeof body.avatarAge === 'string' ? body.avatarAge : 'auto'),
+    buildContactPrompt({
+      phoneNumber: typeof body.phoneNumber === 'string' ? body.phoneNumber.slice(0, 80) : '',
+      websiteUrl: typeof body.websiteUrl === 'string' ? body.websiteUrl.slice(0, 140) : '',
+    }),
   ].filter(Boolean).join('\n');
   const sys = [
     'You are an expert UGC video-ad prompt writer for an image-to-video model.',

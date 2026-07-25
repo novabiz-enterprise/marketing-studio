@@ -25,6 +25,8 @@ async function __byokPOST(req: Request) {
   const targetCountry = cleanText(body.targetCountry, 'auto', 80);
   const avatarSex = cleanText(body.avatarSex, 'auto', 40);
   const avatarAge = cleanText(body.avatarAge, 'auto', 40);
+  const phoneNumber = cleanText(body.phoneNumber, '', 80);
+  const websiteUrl = cleanText(body.websiteUrl, '', 140);
   const nShots = normalizeShotCount(body.nShots);
   const lang = cleanText(body.lang, '英文', 20);
   const ratio = normalizeRatio(body.ratio);
@@ -36,7 +38,7 @@ async function __byokPOST(req: Request) {
     return chargeErrorResponse(e, 'marketing/plan');
   }
 
-  const input: PlanInput = { product, character, formatId, hookId, settingId, avatarId, targetCountry, avatarSex, avatarAge, nShots, lang, ratio };
+  const input: PlanInput = { product, character, formatId, hookId, settingId, avatarId, targetCountry, avatarSex, avatarAge, phoneNumber, websiteUrl, nShots, lang, ratio };
   try {
     const plan = await draftMarketingPlan(input);
     return NextResponse.json({ plan });
