@@ -10,7 +10,7 @@ OPENROUTER_API_KEY=       # OpenRouter API key for text/image/video models
 R2_ACCOUNT_ID=            # Required on Vercel for durable media storage; Cloudflare Workers can use MEDIA_BUCKET binding instead
 R2_ACCESS_KEY_ID=
 R2_SECRET_ACCESS_KEY=
-R2_BUCKET_NAME=marketing-studio-media
+R2_BUCKET_NAME=instatok
 STRIPE_SECRET_KEY=      # 不用 Stripe 可留空 + PAYMENT_PROVIDER=redeem
 STRIPE_WEBHOOK_SECRET=
 PAYMENT_PROVIDER=redeem

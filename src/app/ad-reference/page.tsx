@@ -102,7 +102,7 @@ function readVideoDuration(file: File): Promise<number> {
 type Slot = { url: string; preview: string } | null;
 type Step = 'idle' | 'edit' | 'character' | 'voice' | 'lipsync' | 'done';
 
-// 参考广告示例视频(用户可一键选用、免上传);素材在 R2 marketing-studio-media
+// 参考广告示例视频(用户可一键选用、免上传);素材在 R2 instatok
 const EXAMPLE_REF_VIDEOS = [
   '/api/marketing-studio/media/adref-example-1.mp4',
   '/api/marketing-studio/media/adref-example-2.mp4',
